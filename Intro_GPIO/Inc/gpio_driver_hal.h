@@ -18,21 +18,21 @@
  */
 enum {
 	GPIO_PIN_RESET = 0,
-	GPIO_PIN_SET
+	GPIO_PIN_SET,
 };
-/*alores estándar para las configuraciones */
+/*Valores estándar para las configuraciones */
 /* GPIOx_MODER (dos bit por cada PIN)	*/
 enum{
 	GPIO_MODE_IN = 0,
 	GPIO_MODE_OUT,
 	GPIO_MODE_ALTFN,
 	GPIO_MODE_ANALOG,
-};/*
+};
 
 /*8.4.2 GPIOx_OTYPER (un bit por PIN) */
 enum{
 	GPIO_OTYPE_PUSHPULL = 0,
-	GPIO_OTYPE_OPENDRAIN
+	GPIO_OTYPE_OPENDRAIN,
 };
 
 /* 8.4.3 GPIOx_OSPEEDR (dos bit por cada PIN) */
@@ -40,14 +40,14 @@ enum{
 	GPIO_OSPEED_LOW = 0,
 	GPIO_OSPEED_MEDIUM,
 	GPIO_OSPEED_FAST,
-	GPIO_OSPEED_HIGH
+	GPIO_OSPEED_HIGH,
 };
 /* 8.4.4 GPIOx_PUPDR (dos bit por cada PIN) */
 enum{
 	GPIO_PUPDR_NOTHING = 0,
 	GPIO_PUPDR_PULLUP,
 	GPIO_PUPDR_PULLDOWN,
-	GPIO_PUPDR_RESERVED
+	GPIO_PUPDR_RESERVED,
 };
 
 /* 8.4.5 GPIOx_IDR (un bit por PIN) - Este es el registro para leer el estado de un PIN */
@@ -93,7 +93,7 @@ enum{
 	AF11	= 0b1011,
 	AF12	= 0b1100,
 	AF13	= 0b1101,
-	AF14	= Ob1110,
+	AF14	= 0b1110,
 	AF15	= 0b1111,
 };
 
@@ -103,7 +103,7 @@ enum{
 typedef struct{
 	uint8_t GPIO_PinNumber;			//Working Pin
 	uint8_t GPIO_PinMode;			//Config mode: input, output, analog
-	uint8_t GPIO_PinOutpuSpeed;		//Output speed for working pin
+	uint8_t GPIO_PinOutputSpeed;		//Output speed for working pin
 	uint8_t GPIO_PinPuPdControl;	//Turn ON-OFF the pull down resistor for working pin
 	uint8_t GPIO_PinOutputType;		//Selects output type: push-pull or openDrain
 	uint8_t GPIO_PinAltFunMode;		//Type of alternate function assigned to working pin

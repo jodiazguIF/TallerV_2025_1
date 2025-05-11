@@ -79,7 +79,7 @@
 #define GPIOA_BASE_ADDR		(AHB1_BASE_ADDR + 0x0000U)
 
 //Posiciones de memoria para periféricos del APB2
-/*
+
 #define	SPI5_BASE_ADDR		(APB2_BASE_ADDR + 0x5000U)
 #define TIM11_BASE_ADDR		(APB2_BASE_ADDR + 0x4800U)
 #define TIM10_BASE_ADDR		(APB2_BASE_ADDR + 0x4400U)
@@ -93,7 +93,7 @@
 #define USART6_BASE_ADDR	(APB2_BASE_ADDR + 0x1400U)
 #define USART1_BASE_ADDR	(APB2_BASE_ADDR + 0x1000U)
 #define TIM1_BASE_ADDR		(APB2_BASE_ADDR + 0x0000U)
- */
+
 
 //Posiciones de memoria para periféricos del APB1
 #define PWR_BASE_ADDR		(APB1_BASE_ADDR + 0x7000U)
@@ -218,7 +218,7 @@ typedef struct{
 
 typedef struct{
 	volatile uint32_t MODER;		//Port Mode Register				ADDR_OFFSET:	0x00
-	volatile uint32_t OTYPER; 		//Port Ouput Type Register			ADDR_OFFSET:	0x04
+	volatile uint32_t OTYPER; 		//Port Output Type Register			ADDR_OFFSET:	0x04
 	volatile uint32_t OSPEEDR; 		//Port Output Speed Register		ADDR_OFFSET:	0x08
 	volatile uint32_t PUPDR;		//Port pull-up/pull-down register	ADDR_OFFSET:	0x0C
 	volatile uint32_t IDR;			//Port Input Data Register			ADDR_OFFSET:	0x10

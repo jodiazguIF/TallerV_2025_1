@@ -34,7 +34,7 @@ int main(void){
     *registerGPIOA_MODE &= ~(0b11 << 10); 	//Limpiando la posición que controla al pin 5 del GPIOA
     *registerGPIOA_MODE |= (0b01 << 10);  	//Activando al pin GPIOA_5 en modo de salida de propósito general
 
-    uint32_t *registerGPIOA_ODR = (uint32_t *)GPIOA_ODR_REG;
+    uint32_t *registerGPIOA_ODR = (uint32_t *)GPIOA_ODR_REG; //Creando una variable que apunta al registro GPIOA_ODR_REG
     *registerGPIOA_ODR |= (1 << 5); //Se enciende el pin GPIOA_5 -> LED verde de la boarde debería encenderse
 
     /*Loop pa siempre*/
