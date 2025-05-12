@@ -210,7 +210,7 @@ void gpio_WritePin(GPIO_Handler_t *pPinHandler, uint8_t newState){
 	//Se verifica si la acción es permitida
 	assert_param(IS_GPIO_PIN_ACTION(newState));
 
-	//Se limpia la posició que se desea
+	//Se limpia la posición que se desea
 	pPinHandler->pGPIOx->ODR &= ~(SET << pPinHandler->pinConfig.GPIO_PinNumber);
 	if (newState == SET){
 		//Trabajamos con la parte baja del registro
@@ -227,11 +227,19 @@ uint32_t gpio_ReadPin(GPIO_Handler_t *pPinHandler){
 
 	//Cargamos el valor del registro IDR, desplazado a derecha tantas veces como la ubicación del pin específo
 	pinValue = (pPinHandler->pGPIOx->IDR << pPinHandler->pinConfig.GPIO_PinNumber);
-	pinValue = pinValue;
 
 	return pinValue;
 }
 
+void gpio_TooglePin(GPIO_Handler_t *pPinHandler){
+	uint16_t pinNumber = pPinHandler->pinConfig.GPIO_PinNumber;
 
-
-
+	//Se lee el estado actual del pin
+	if(pPinHandler->pGPIOx->ODR & (1 << pinNumber)){
+		//Está en 1, se debe apagar (Escribir en la parte alta del BSRR)
+		pPinHandler->pGPIOx->BSRR = (1 << (pinNumber+16));
+	}else{
+		//Está en 0, se debe encender (Escribir en la parte baja del BSRR)
+		pPinHandler->pGPIOx->BSRR = (1 << pinNumber);
+	}
+}

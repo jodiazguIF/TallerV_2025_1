@@ -10,9 +10,12 @@
 #include "stm32f4xx.h"
 #include "stm32_assert.h"
 #include "gpio_driver_hal.h"
+#include "timer_driver_hal.h"
 
 //Definimos un Pin de prueba
 GPIO_Handler_t userLed = {0}; //Pin A5
+
+Timer_Handler_t blinkTimer = {0};
 
 //Main function, where everything happens
 
@@ -31,9 +34,29 @@ int main(void){
 
 	gpio_WritePin(&userLed, SET);
 
+	blinkTimer.pTIMx							= TIM2;
+	blinkTimer.TIMx_Config.TIMx_Prescaler		= 16000;	//Genera Incrementos de 1ms
+	blinkTimer.TIMx_Config.TIMx_Period			= 250;	//De la mano con el prescaler,
+	blinkTimer.TIMx_Config.TIMx_Mode			= TIMER_UP_COUNTER;
+	blinkTimer.TIMx_Config.TIMx_InterruptEnable	= TIMER_INT_ENABLE;
+
+	//Configuramos el Timer
+	timer_Config(&blinkTimer);
+
+	//Encedemos el Timer
+	timer_SetState(&blinkTimer, TIMER_ON);
+
 	while(1){
 		//Loop pa siempre
 	}
+}
+
+/*
+ * OverWrite function
+ */
+void Timer2_Callback(void){
+	gpio_TooglePin(&userLed);
+
 }
 
 /* Esta función sirve para detectar problemas de parámetros

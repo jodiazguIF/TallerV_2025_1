@@ -24,10 +24,10 @@ enum{
 };
 /* Estructura que contiene la configuración mínima para el manejo del timer*/
 typedef struct{
-	uint8_t		TIMx_MODE;			//Up or Down
+	uint8_t		TIMx_Mode;			//Up or Down
 	uint16_t	TIMx_Prescaler;		//Prescaler (evidentemente)
 	uint32_t	TIMx_Period;		//Valor en ms del periodo del Timer
-	uint8_t		InterruptEnable;	//Activa o desactiva el modo interrupción
+	uint8_t		TIMx_InterruptEnable;	//Activa o desactiva el modo interrupción
 } Timer_BasicConfig_t;
 
 /*Handler para el Timer*/
