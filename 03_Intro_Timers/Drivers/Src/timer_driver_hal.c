@@ -73,6 +73,16 @@ void timer_enable_clock_peripheral(Timer_Handler_t *pTimerHandler){
 		RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 	}else if(pTimerHandler->pTIMx == TIM3){
 		RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
+	}else if(pTimerHandler->pTIMx == TIM4){
+		RCC ->APB1ENR |= RCC_APB1ENR_TIM4EN;
+	}else if(pTimerHandler->pTIMx == TIM5){
+		RCC ->APB1ENR |= RCC_APB1ENR_TIM5EN;
+	}else if(pTimerHandler->pTIMx == TIM9){
+		RCC ->APB2ENR |= RCC_APB2ENR_TIM9EN;
+	}else if(pTimerHandler->pTIMx == TIM10){
+		RCC ->APB2ENR |= RCC_APB2ENR_TIM10EN;
+	}else if(pTimerHandler->pTIMx == TIM11){
+		RCC ->APB2ENR |= RCC_APB2ENR_TIM11EN;
 	}else{
 		__NOP();
 	}
@@ -100,9 +110,7 @@ void timer_set_prescaler(Timer_Handler_t *pTimerHandler){
 
 void timer_set_period(Timer_Handler_t *pTimerHandler){
 	//Verificamos que el valor que genera el periodo es válido
-	assert_param(IS_TIMER_PERIOD(pTimerHandler->TIMx_Config.TIMx_Prescaler));
-
-	//Acá hace falta algo... supongo ??
+	assert_param(IS_TIMER_PERIOD(pTimerHandler->TIMx_Config.TIMx_Period));
 
 	//Configuramos el valor del autoreload
 	pTimerHandler->pTIMx->ARR = pTimerHandler->TIMx_Config.TIMx_Period- 1;
@@ -141,6 +149,10 @@ void timer_config_interrupt(Timer_Handler_t *pTimerHandler){
 			NVIC_EnableIRQ(TIM2_IRQn);
 		}else if(pTimerHandler->pTIMx == TIM3){
 			NVIC_EnableIRQ(TIM3_IRQn);
+		}else if(pTimerHandler->pTIMx == TIM4){
+			NVIC_EnableIRQ(TIM4_IRQn);
+		}else if(pTimerHandler->pTIMx == TIM5){
+			NVIC_EnableIRQ(TIM5_IRQn);
 		}else{
 			__NOP();
 		}
@@ -169,7 +181,16 @@ void timer_SetState(Timer_Handler_t *pTimerHandler, uint8_t newState){
   *
   */
 
-__attribute__((weak)) void Timer2_Callback(void){
+__attribute__((weak)) void timer2_Callback(void){
+	__NOP();
+}
+__attribute__((weak)) void timer3_Callback(void){
+	__NOP();
+}
+__attribute__((weak)) void timer4_Callback(void){
+	__NOP();
+}
+__attribute__((weak)) void timer5_Callback(void){
 	__NOP();
 }
 
@@ -179,21 +200,32 @@ __attribute__((weak)) void Timer2_Callback(void){
  * AL hacerlo correcta, el sistema apunta a esta función y cuando la interrupción se lanza
  * el sistema inmediatamente salta a este ligar de la memoria
  */
+
 void TIM2_IRQHandler(void){
 	//Limpiamos la bandera que indica que la interrupción se ha generado
 	TIM2->SR &= ~TIM_SR_UIF;
 
-	//Llamamos a la funciónque se debe encargar de hacer algo con esta interrupción
-	Timer2_Callback();
+	//Llamamos a la función que se debe encargar de hacer algo con esta interrupción
+	timer2_Callback();
 }
+void TIM3_IRQHandler(void){
+	//Limpiamos la bandera que indica que la interrupción se ha generado
+	TIM3->SR &= ~TIM_SR_UIF;
 
+	//Llamamos a la función que se debe encargar de hacer algo con esta interrupción
+	timer3_Callback();
+}
+void TIM4_IRQHandler(void){
+	//Limpiamos la bandera que indica que la interrupción se ha generado
+	TIM4->SR &= ~TIM_SR_UIF;
 
+	//Llamamos a la función que se debe encargar de hacer algo con esta interrupción
+	timer4_Callback();
+}
+void TIM5_IRQHandler(void){
+	//Limpiamos la bandera que indica que la interrupción se ha generado
+	TIM5->SR &= ~TIM_SR_UIF;
 
-
-
-
-
-
-
-
-
+	//Llamamos a la función que se debe encargar de hacer algo con esta interrupción
+	timer5_Callback();
+}

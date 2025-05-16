@@ -221,6 +221,7 @@ void gpio_WritePin(GPIO_Handler_t *pPinHandler, uint8_t newState){
 	}
 }
 
+
 uint32_t gpio_ReadPin(GPIO_Handler_t *pPinHandler){
 	//Creamos una variable auxiliar la cual retornaremos
 	uint32_t pinValue = 0;
@@ -230,6 +231,7 @@ uint32_t gpio_ReadPin(GPIO_Handler_t *pPinHandler){
 
 	return pinValue;
 }
+
 
 void gpio_TooglePin(GPIO_Handler_t *pPinHandler){
 	uint16_t pinNumber = pPinHandler->pinConfig.GPIO_PinNumber;
