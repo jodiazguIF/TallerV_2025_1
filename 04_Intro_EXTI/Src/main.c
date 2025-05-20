@@ -15,6 +15,7 @@
 
 //Definimos lo que vamos a utilizar en el código
 GPIO_Handler_t userLed = {0};
+
 //Se definen los pines de los 7 segmentos
 GPIO_Handler_t SieteSegmentosLEDA = {0};
 GPIO_Handler_t SieteSegmentosLEDB = {0};
@@ -24,7 +25,16 @@ GPIO_Handler_t SieteSegmentosLEDE = {0};
 GPIO_Handler_t SieteSegmentosLEDF = {0};
 GPIO_Handler_t SieteSegmentosLEDG = {0};
 
+//Se definen los pines que encienden o apagan cada Digito
+GPIO_Handler_t DigitoD1 = {0};
+GPIO_Handler_t DigitoD2 = {0};
+GPIO_Handler_t DigitoD3 = {0};
+GPIO_Handler_t DigitoD4 = {0};
 
+//Se definen los pines que manejan el RGB
+GPIO_Handler_t RGB_AZUL = {0};
+GPIO_Handler_t RGB_ROJO = {0};
+GPIO_Handler_t RGB_VERDE = {0};
 
 Timer_Handler_t blinkTimer = {0};
 
@@ -35,6 +45,7 @@ void initTimers(void);
 int main(void){
 	initSystem();
 	initTimers();
+
 
 	while(1){
 		//Loop pa siempre
@@ -54,8 +65,8 @@ void initSystem(void){
 	gpio_WritePin(&userLed, SET);
 
 	//Se configuran los pines del 7 segmentos, LED A
-	SieteSegmentosLEDA.pGPIOx							= GPIOA;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
-	SieteSegmentosLEDA.pinConfig.GPIO_PinNumber			= PIN_11;
+	SieteSegmentosLEDA.pGPIOx							= GPIOC;
+	SieteSegmentosLEDA.pinConfig.GPIO_PinNumber			= PIN_9;
 	SieteSegmentosLEDA.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDA.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
 	SieteSegmentosLEDA.pinConfig.GPIO_PinOutputSpeed	= GPIO_OSPEED_MEDIUM;
@@ -65,8 +76,8 @@ void initSystem(void){
 	gpio_WritePin(&SieteSegmentosLEDA, RESET);
 
 	//LED B
-	SieteSegmentosLEDB.pGPIOx							= GPIOB;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
-	SieteSegmentosLEDB.pinConfig.GPIO_PinNumber			= PIN_11;
+	SieteSegmentosLEDB.pGPIOx							= GPIOA;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
+	SieteSegmentosLEDB.pinConfig.GPIO_PinNumber			= PIN_12;
 	SieteSegmentosLEDB.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDB.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
 	SieteSegmentosLEDB.pinConfig.GPIO_PinOutputSpeed	= GPIO_OSPEED_MEDIUM;
@@ -76,8 +87,8 @@ void initSystem(void){
 	gpio_WritePin(&SieteSegmentosLEDB, RESET);
 
 	//LED C
-	SieteSegmentosLEDC.pGPIOx							= GPIOB;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
-	SieteSegmentosLEDC.pinConfig.GPIO_PinNumber			= PIN_11;
+	SieteSegmentosLEDC.pGPIOx							= GPIOC;
+	SieteSegmentosLEDC.pinConfig.GPIO_PinNumber			= PIN_12;
 	SieteSegmentosLEDC.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDC.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
 	SieteSegmentosLEDC.pinConfig.GPIO_PinOutputSpeed	= GPIO_OSPEED_MEDIUM;
@@ -87,8 +98,8 @@ void initSystem(void){
 	gpio_WritePin(&SieteSegmentosLEDC, RESET);
 
 	//LED D
-	SieteSegmentosLEDD.pGPIOx							= GPIOB;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
-	SieteSegmentosLEDD.pinConfig.GPIO_PinNumber			= PIN_11;
+	SieteSegmentosLEDD.pGPIOx							= GPIOC;
+	SieteSegmentosLEDD.pinConfig.GPIO_PinNumber			= PIN_10;
 	SieteSegmentosLEDD.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDD.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
 	SieteSegmentosLEDD.pinConfig.GPIO_PinOutputSpeed	= GPIO_OSPEED_MEDIUM;
@@ -98,18 +109,18 @@ void initSystem(void){
 	gpio_WritePin(&SieteSegmentosLEDD, RESET);
 
 	//LED E
-	SieteSegmentosLEDE.pGPIOx							= GPIOB;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
-	SieteSegmentosLEDE.pinConfig.GPIO_PinNumber			= PIN_11;
+	SieteSegmentosLEDE.pGPIOx							= GPIOD;
+	SieteSegmentosLEDE.pinConfig.GPIO_PinNumber			= PIN_2;
 	SieteSegmentosLEDE.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDE.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
 	SieteSegmentosLEDE.pinConfig.GPIO_PinOutputSpeed	= GPIO_OSPEED_MEDIUM;
 	SieteSegmentosLEDE.pinConfig.GPIO_PinPuPdControl	= GPIO_PUPDR_NOTHING;
 	//Se carga la configuración en los registro que gobiernan el puerto
 	gpio_Config(&SieteSegmentosLEDE);
-	gpio_WritePin(&SieteSegmentosLEDE, SET);
+	gpio_WritePin(&SieteSegmentosLEDE, RESET);
 
 	//LED F
-	SieteSegmentosLEDF.pGPIOx							= GPIOB;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
+	SieteSegmentosLEDF.pGPIOx							= GPIOA;
 	SieteSegmentosLEDF.pinConfig.GPIO_PinNumber			= PIN_11;
 	SieteSegmentosLEDF.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDF.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
@@ -117,10 +128,10 @@ void initSystem(void){
 	SieteSegmentosLEDF.pinConfig.GPIO_PinPuPdControl	= GPIO_PUPDR_NOTHING;
 	//Se carga la configuración en los registro que gobiernan el puerto
 	gpio_Config(&SieteSegmentosLEDF);
-	gpio_WritePin(&SieteSegmentosLEDF, SET);
+	gpio_WritePin(&SieteSegmentosLEDF, RESET);
 
 	//LED G
-	SieteSegmentosLEDG.pGPIOx							= GPIOB;//Pin de estado para la board Táctica GPIOA PIN_5 sin board Táctica
+	SieteSegmentosLEDG.pGPIOx							= GPIOC;
 	SieteSegmentosLEDG.pinConfig.GPIO_PinNumber			= PIN_11;
 	SieteSegmentosLEDG.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
 	SieteSegmentosLEDG.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
@@ -130,6 +141,82 @@ void initSystem(void){
 	gpio_Config(&SieteSegmentosLEDG);
 	gpio_WritePin(&SieteSegmentosLEDG, SET);
 
+	//Digito D1
+	DigitoD1.pGPIOx								= GPIOC;
+	DigitoD1.pinConfig.GPIO_PinNumber			= PIN_5;
+	DigitoD1.pinConfig.GPIO_PinMode				= GPIO_MODE_OUT;
+	DigitoD1.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	DigitoD1.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	DigitoD1.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&DigitoD1);
+	gpio_WritePin(&DigitoD1, RESET);
+
+	//Digito D2
+	DigitoD2.pGPIOx								= GPIOC;
+	DigitoD2.pinConfig.GPIO_PinNumber			= PIN_6;
+	DigitoD2.pinConfig.GPIO_PinMode				= GPIO_MODE_OUT;
+	DigitoD2.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	DigitoD2.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	DigitoD2.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&DigitoD2);
+	gpio_WritePin(&DigitoD2, RESET);
+
+	//Digito D3
+	DigitoD3.pGPIOx								= GPIOC;
+	DigitoD3.pinConfig.GPIO_PinNumber			= PIN_8;
+	DigitoD3.pinConfig.GPIO_PinMode				= GPIO_MODE_OUT;
+	DigitoD3.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	DigitoD3.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	DigitoD3.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&DigitoD3);
+	gpio_WritePin(&DigitoD3, RESET);
+
+	//Digito D4
+	DigitoD4.pGPIOx								= GPIOB;
+	DigitoD4.pinConfig.GPIO_PinNumber			= PIN_7;
+	DigitoD4.pinConfig.GPIO_PinMode				= GPIO_MODE_OUT;
+	DigitoD4.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	DigitoD4.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	DigitoD4.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&DigitoD4);
+	gpio_WritePin(&DigitoD4, RESET);
+
+	//RGB ROJO
+	RGB_ROJO.pGPIOx								= GPIOB;
+	RGB_ROJO.pinConfig.GPIO_PinNumber			= PIN_8;
+	RGB_ROJO.pinConfig.GPIO_PinMode				= GPIO_MODE_OUT;
+	RGB_ROJO.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	RGB_ROJO.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	RGB_ROJO.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&RGB_ROJO);
+	gpio_WritePin(&RGB_ROJO, RESET);
+
+	//RGB VERDE
+	RGB_VERDE.pGPIOx							= GPIOA;
+	RGB_VERDE.pinConfig.GPIO_PinNumber			= PIN_5;
+	RGB_VERDE.pinConfig.GPIO_PinMode			= GPIO_MODE_OUT;
+	RGB_VERDE.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	RGB_VERDE.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	RGB_VERDE.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&RGB_VERDE);
+	gpio_WritePin(&RGB_VERDE, SET);
+
+	//RGB AZUL
+	RGB_AZUL.pGPIOx								= GPIOA;
+	RGB_AZUL.pinConfig.GPIO_PinNumber			= PIN_6;
+	RGB_AZUL.pinConfig.GPIO_PinMode				= GPIO_MODE_OUT;
+	RGB_AZUL.pinConfig.GPIO_PinOutputType		= GPIO_OTYPE_PUSHPULL;
+	RGB_AZUL.pinConfig.GPIO_PinOutputSpeed		= GPIO_OSPEED_MEDIUM;
+	RGB_AZUL.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
+	//Se carga la configuración en los registro que gobiernan el puerto
+	gpio_Config(&RGB_AZUL);
+	gpio_WritePin(&RGB_AZUL, SET);
 
 }
 
