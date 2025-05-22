@@ -50,7 +50,10 @@ typedef struct{
 void timer_Config(Timer_Handler_t *pTimerHandler);
 void timer_SetState(Timer_Handler_t *pTimerHandler, uint8_t newState);
 
-//Esta función debe ser sobreescrita en el main para que el sistema funcione ???
+//Esta función debe ser sobreescrita en el main para que el sistema funcione
 void timer2_Callback(void);
+void timer3_Callback(void);
+void timer4_Callback(void);
+void timer5_Callback(void);
 
 #endif /* INC_TIMER_DRIVER_HAL_H_ */

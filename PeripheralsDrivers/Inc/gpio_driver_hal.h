@@ -103,7 +103,7 @@ enum{
 typedef struct{
 	uint8_t GPIO_PinNumber;			//Working Pin
 	uint8_t GPIO_PinMode;			//Config mode: input, output, analog
-	uint8_t GPIO_PinOutputSpeed;		//Output speed for working pin
+	uint8_t GPIO_PinOutputSpeed;	//Output speed for working pin
 	uint8_t GPIO_PinPuPdControl;	//Turn ON-OFF the pull down resistor for working pin
 	uint8_t GPIO_PinOutputType;		//Selects output type: push-pull or openDrain
 	uint8_t GPIO_PinAltFunMode;		//Type of alternate function assigned to working pin
@@ -114,7 +114,7 @@ typedef struct{
  * Pin Handler definition
  * This handler is used to configure the port at which the selected pin is working
  * It holds two elements:
- * - Reference to the complete port (GPIOx), to have acces for the specific registers.
+ * - Reference to the complete port (GPIOx), to have access for the specific registers.
  * - Configuration structure: GPIO_PinConfig_t
  */
 typedef struct{

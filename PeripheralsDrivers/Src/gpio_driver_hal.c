@@ -225,10 +225,12 @@ void gpio_WritePin(GPIO_Handler_t *pPinHandler, uint8_t newState){
 uint32_t gpio_ReadPin(GPIO_Handler_t *pPinHandler){
 	//Creamos una variable auxiliar la cual retornaremos
 	uint32_t pinValue = 0;
-
-	//Cargamos el valor del registro IDR, desplazado a derecha tantas veces como la ubicación del pin específo
-	pinValue = (pPinHandler->pGPIOx->IDR << pPinHandler->pinConfig.GPIO_PinNumber);
-
+	//Cargamos el valor del registro IDR, desplazado a la derecha tantas veces como la ubicación del pin específico
+	pinValue = ( (pPinHandler->pGPIOx->IDR >> pPinHandler->pinConfig.GPIO_PinNumber) & 0b1 );
+	//Se mira el registro IDR que tiene el valor de input simple de los puertos
+	//Se desplaza tantas veces como el PIN que se quiere leer a la derecha y se aplica una máscara 0b1
+	//Con el fin de quedar con un valor de 1 o 0, se usa & (AND) para que si está en alto entonces
+	//devuelve 1 y si está en bajo entonces devuelve 0
 	return pinValue;
 }
 
