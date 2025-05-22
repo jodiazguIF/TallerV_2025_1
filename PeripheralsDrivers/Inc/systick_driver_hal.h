@@ -17,9 +17,10 @@
 /*
  * SysTick ClockSource
  */
+
 typedef enum {
 	SYSTICK_CLOCK_SOURCE_EXTERNAL= 0,
-	SYSTICK_CLOCK_SOURCE_PROCCESOR,
+	SYSTICK_CLOCK_SOURCE_PROCCESSOR,
 } SysTick_ClockSource_t;
 
 /*
@@ -48,7 +49,7 @@ typedef struct{
 
 /* For testing assert parameters - checking basic configurations */
 #define IS_SYSTICK_RELOAD(VALUE)					(((uint32_t)VALUE) > 0 && ((uint32_t)VALUE) < 0xFFFFFF) //Debe ser mayor estricto que 0 y menor estricto que 24 bits
-#define IS_SYSTICK_CLOCKSOURCE(VALUE)				(((VALUE) == SYSTICK_CLOCK_SOURCE_EXTERNAL) || ((VALUE) == SYSTICK_CLOCK_SOURCE_PROCCESOR))
+#define IS_SYSTICK_CLOCKSOURCE(VALUE)				(((VALUE) == SYSTICK_CLOCK_SOURCE_EXTERNAL) || ((VALUE) == SYSTICK_CLOCK_SOURCE_PROCCESSOR))
 #define IS_SYSTICK_INTERRUPT(VALUE)					(((VALUE) == SYSTICK_TICKINT_ENABLED) || ((VALUE) == SYSTICK_TICKINT_DISABLED))
 #define IS_SYSTICK_STATE(VALUE)						(((VALUE) == SYSTICK_OFF) || ((VALUE) == SYSTICK_ON))
 
@@ -57,6 +58,6 @@ void systick_Config(SysTick_Handler_t *pSysTickHandler);
 void systick_SetState(SysTick_Handler_t *pSysTickHandler, uint8_t newState);
 
 //El callback del SysTick
-void systick_Callback(void);
+void SysTick_Callback(void);
 
 #endif /* SYSTICK_DRIVER_HAL_H_ */

@@ -12,6 +12,7 @@
 #include "gpio_driver_hal.h"
 #include "timer_driver_hal.h"
 #include "exti_driver_hal.h"
+#include "systick_driver_hal.h"
 
 // Se definen los estados finitos que usaremos para la máquina de estados
 typedef enum{
@@ -39,6 +40,8 @@ RGB_Color_t Current_Color = APAGADO;	//Se fija el estado inicial
 uint16_t contador_Taximetro = 0000;
 //Variable que lleva el dato del dígito que se enciende en el taxímetro
 short digito = 0;
+//Se inicializa una variable que lleva el tiempo en ms que ha pasado desde el inicio
+uint32_t contador_Tiempo = 0;
 
 //Variables auxiliares para llevar los digitos que se deben mostrar en el taxímetro
 uint8_t miles_contador_Taximetro 	= 0;
@@ -83,10 +86,15 @@ Timer_Handler_t blinkTimer = {0};
 //Se define el timer para el taxímetro
 Timer_Handler_t taxiTimer = {0};
 
+//Se define una variable para el SysTick
+SysTick_Handler_t systick = {0};
+
+
 //Funciones que se usan en el main
 void initPortPin(void);
 void initTimers(void);
 void initEXTI(void);
+void initSysTick(void);
 void FSM_update(State_t State);
 
 //Main function, where everything happens
@@ -94,6 +102,7 @@ int main(void){
 	initPortPin();
 	initTimers();
 	initEXTI();
+	initSysTick();
 
 	while(1){
 		FSM_update(Current_State);
@@ -198,7 +207,7 @@ void initPortPin(void){
 	DigitoD0.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
 	//Se carga la configuración en los registro que gobiernan el puerto
 	gpio_Config(&DigitoD0);
-	gpio_WritePin(&DigitoD0, RESET);
+	gpio_WritePin(&DigitoD0, SET);
 
 	//Digito D1
 	DigitoD1.pGPIOx								= GPIOC;
@@ -209,7 +218,7 @@ void initPortPin(void){
 	DigitoD1.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
 	//Se carga la configuración en los registro que gobiernan el puerto
 	gpio_Config(&DigitoD1);
-	gpio_WritePin(&DigitoD1, RESET);
+	gpio_WritePin(&DigitoD1, SET);
 
 	//Digito D2
 	DigitoD2.pGPIOx								= GPIOC;
@@ -220,7 +229,7 @@ void initPortPin(void){
 	DigitoD2.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
 	//Se carga la configuración en los registro que gobiernan el puerto
 	gpio_Config(&DigitoD2);
-	gpio_WritePin(&DigitoD2, RESET);
+	gpio_WritePin(&DigitoD2, SET);
 
 	//Digito D3
 	DigitoD3.pGPIOx								= GPIOC;
@@ -231,7 +240,7 @@ void initPortPin(void){
 	DigitoD3.pinConfig.GPIO_PinPuPdControl		= GPIO_PUPDR_NOTHING;
 	//Se carga la configuración en los registro que gobiernan el puerto
 	gpio_Config(&DigitoD3);
-	gpio_WritePin(&DigitoD3, RESET);
+	gpio_WritePin(&DigitoD3, SET);
 
 	//RGB ROJO
 	RGB_ROJO.pGPIOx								= GPIOB;
@@ -288,7 +297,7 @@ void initTimers(void){
 
 	taxiTimer.pTIMx								= TIM3;		//Se usa un Timer diferente
 	taxiTimer.TIMx_Config.TIMx_Prescaler		= 16000; 	//Incrementos de 1ms
-	taxiTimer.TIMx_Config.TIMx_Period			= 5;		//Interrupción cada 7ms
+	taxiTimer.TIMx_Config.TIMx_Period			= 5;		//Interrupción cada 5ms
 	taxiTimer.TIMx_Config.TIMx_Mode				= TIMER_UP_COUNTER;
 	taxiTimer.TIMx_Config.TIMx_InterruptEnable	= TIMER_INT_ENABLE;
 	timer_Config(&taxiTimer);				//Se configura el Timer
@@ -320,6 +329,18 @@ void initEXTI(void){
 	gpio_Config(&gpio_CLKPin);
 	exti_Config(&exti_CLKPin);
 
+}
+
+void initSysTick(void){
+	//Se configura el Systick
+	systick.pSysTickx								= SysTick;
+	systick.SysTickConfig.SYSTICK_ClockSource		= SYSTICK_CLOCK_SOURCE_PROCCESSOR;
+	systick.SysTickConfig.SYSTICK_ReloadValue		= 16000000; //Interrupción cada s
+	systick.SysTickConfig.SYSTICK_InterruptEnable	= SYSTICK_TICKINT_ENABLED;
+	//Se carga la configuración
+	systick_Config(&systick);
+	//Se inicia el contador
+	systick_SetState(&systick, SYSTICK_ON);
 }
 
 void cambioEstadoLEDRGB(RGB_Color_t Color){
@@ -370,22 +391,6 @@ void cambioEstadoLEDRGB(RGB_Color_t Color){
 			break;
 		}
 	}
-}
-
-void callback_ExtInt0(void){	//función callback para el EXTI0
-	Current_State = STATE_RGB_FEEDBACK;	//Al identificar un flanco de subida en el switch se cambia al estado RGB
-}
-
-void callback_ExtInt1(void){	//función callback para el EXTI1
-	Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
-}
-
-void timer2_Callback(void){		//función callback para el Timer2
-	gpio_TooglePin(&userLed);	//La interrupción solamente hace un blinky para el led de estado
-}
-
-void timer3_Callback(void){		//función callback para el TImer3, la cual lleva el refresco indepenediente del 7 segmentos de 4 digitos
-	digito++;	//Cambia al siguiente dígito del 7 segmentos
 }
 
 void separarContador(void){
@@ -567,6 +572,26 @@ void FSM_update(State_t State){
 	}
 }
 
+void callback_ExtInt0(void){	//función callback para el EXTI0
+	Current_State = STATE_RGB_FEEDBACK;	//Al identificar un flanco de subida en el switch se cambia al estado RGB
+}
+
+void callback_ExtInt1(void){	//función callback para el EXTI1
+	Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
+}
+
+void timer2_Callback(void){		//función callback para el Timer2
+	//gpio_TooglePin(&userLed);	//La interrupción solamente hace un blinky para el led de estado
+}
+
+void timer3_Callback(void){		//función callback para el TImer3, la cual lleva el refresco indepenediente del 7 segmentos de 4 digitos
+	digito++;	//Cambia al siguiente dígito del 7 segmentos
+}
+
+void SysTick_Callback(void){
+	gpio_TooglePin(&userLed);
+	contador_Tiempo++;
+}
 
 /* Esta función sirve para detectar problemas de parámetros
  * Incorrectos al momento de ejecutar el programa

@@ -210,8 +210,6 @@ void gpio_WritePin(GPIO_Handler_t *pPinHandler, uint8_t newState){
 	//Se verifica si la acción es permitida
 	assert_param(IS_GPIO_PIN_ACTION(newState));
 
-	//Se limpia la posición que se desea
-	pPinHandler->pGPIOx->ODR &= ~(SET << pPinHandler->pinConfig.GPIO_PinNumber);
 	if (newState == SET){
 		//Trabajamos con la parte baja del registro
 		pPinHandler->pGPIOx->BSRR |= (SET << pPinHandler->pinConfig.GPIO_PinNumber);

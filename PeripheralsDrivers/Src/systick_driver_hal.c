@@ -11,9 +11,9 @@
 
 //Variable que guarda la referencia de lo que se está usando
 SysTick_Type *ptrSystickUsed;
+uint32_t COUNTERFLAG = 0;
 
 /* Headers para funciones privadas */
-static void systick_enable(SysTick_Handler_t *pSysTickHandler);
 static void systick_set_reload_value(SysTick_Handler_t *pSysTickHandler);
 static void systick_clock_source(SysTick_Handler_t *pSysTickHandler);
 static void systick_config_interrupt(SysTick_Handler_t *pSysTickHandler);
@@ -33,16 +33,14 @@ void systick_Config(SysTick_Handler_t *pSysTickHandler){
 
 	//0. Desativamos las interrupciones globales mientras configuramos el sistema
 	__disable_irq();
-	//1. Activar la señal de reloj del SysTick
-	systick_enable(pSysTickHandler);
 
-	//2. Se configura el valor de Recarga
+	//1. Se configura el valor de Recarga
 	systick_set_reload_value(pSysTickHandler);
 
-	//3. Se configura el origen de la señal de reloj
+	//2. Se configura el origen de la señal de reloj
 	systick_clock_source(pSysTickHandler);
 
-	//4. Se configura la interrupción
+	//3. Se configura la interrupción
 	systick_config_interrupt(pSysTickHandler);
 
 	//Se vuelve a activar las interrupciones del sistema
@@ -50,13 +48,6 @@ void systick_Config(SysTick_Handler_t *pSysTickHandler){
 
 	//El SysTick inicia apagado
 	systick_SetState(pSysTickHandler, SYSTICK_OFF);
-}
-
-void systick_enable(SysTick_Handler_t *pSysTickHandler){
-	//Se limpia el registro que contiene el enable
-	pSysTickHandler->pSysTickx->CTRL &= ~(1 << SysTick_CTRL_ENABLE_Pos);
-	//Se activa el SysTick
-	pSysTickHandler->pSysTickx->CTRL |= (SysTick_CTRL_ENABLE_Msk);
 }
 
 void systick_set_reload_value(SysTick_Handler_t *pSysTickHandler){
@@ -76,10 +67,10 @@ void systick_clock_source(SysTick_Handler_t *pSysTickHandler){
 	//Verificamos cuál es el modo que se desea configurar
 	if (pSysTickHandler->SysTickConfig.SYSTICK_ClockSource == SYSTICK_CLOCK_SOURCE_EXTERNAL){
 		//Se configura el origen del clock como externo Ext_Clk = 0
-		pSysTickHandler->pSysTickx->CTRL &= ~(1 << SysTick_CTRL_CLKSOURCE_Pos);
+		pSysTickHandler->pSysTickx->CTRL &= ~(SysTick_CTRL_CLKSOURCE_Msk);
 	}else{
 		//Se configura el origen como del procesador, Proc_Clk = 1
-		pSysTickHandler->pSysTickx->CTRL |= (1 << SysTick_CTRL_CLKSOURCE_Pos);
+		pSysTickHandler->pSysTickx->CTRL |= SysTick_CTRL_CLKSOURCE_Msk;
 	}
 }
 
@@ -91,11 +82,13 @@ void systick_config_interrupt(SysTick_Handler_t *pSysTickHandler){
 	//Luego se activa o desactiva la interrupción según corresponda
 	if(pSysTickHandler->SysTickConfig.SYSTICK_InterruptEnable == SYSTICK_TICKINT_DISABLED){
 		//Se desactivan, 0 en el registro de tickint
-		pSysTickHandler->pSysTickx->CTRL &= ~(1 << SysTick_CTRL_TICKINT_Pos);
+		pSysTickHandler->pSysTickx->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
 	}else{
 		//Se activan, 1 en el registro
-		pSysTickHandler->pSysTickx->CTRL |= (1 << SysTick_CTRL_TICKINT_Pos);
+		pSysTickHandler->pSysTickx->CTRL |= SysTick_CTRL_TICKINT_Msk;
+		NVIC_EnableIRQ(SysTick_IRQn);
 	}
+
 }
 void systick_SetState(SysTick_Handler_t *pSysTickHandler, uint8_t newState){
 	//Verificamos que el estado ingresado es adecuado
@@ -117,21 +110,10 @@ __attribute__((weak)) void SysTick_Callback(void){
 	__NOP();
 }
 
-void SysTick_IRQHandler(void){
+void SysTick_Handler(void){
 	//Se limpia la bandera que indica que la interrupción se ha generado
-	SysTick->CTRL &= ~ SysTick_CTRL_COUNTFLAG_Msk;
+	SysTick->CTRL &= ~(SysTick_CTRL_COUNTFLAG_Msk);
 
 	//Se llama a la función que se debe encargar de hacer algo con esa interrupción
 	SysTick_Callback();
 }
-
-
-
-
-
-
-
-
-
-
-
