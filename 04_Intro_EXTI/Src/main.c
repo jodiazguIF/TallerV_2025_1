@@ -5,7 +5,7 @@
  * @brief          : Main program body
  ******************************************************************************
  */
-
+#include <stdio.h>
 #include <stdint.h>
 #include "stm32f4xx.h"
 #include "stm32_assert.h"
@@ -14,13 +14,14 @@
 #include "exti_driver_hal.h"
 #include "systick_driver_hal.h"
 
+
 // Se definen los estados finitos que usaremos para la máquina de estados
 typedef enum{
-	STATE_IDLE,
+	STATE_REFRESH,
 	STATE_RGB_FEEDBACK,
 	STATE_TAXIMETER_FEEDBACK
 } State_t;
-State_t Current_State = STATE_IDLE; // Se fija el estado por defecto
+State_t Current_State = STATE_REFRESH; // Se fija el estado por defecto
 
 //Se definen los estados finitos que puede tener el led RGB
 typedef enum{
@@ -96,6 +97,8 @@ void initTimers(void);
 void initEXTI(void);
 void initSysTick(void);
 void FSM_update(State_t State);
+void configMagic(void);
+
 
 //Main function, where everything happens
 int main(void){
@@ -103,6 +106,9 @@ int main(void){
 	initTimers();
 	initEXTI();
 	initSysTick();
+	configMagic();
+	printf("Configuración Terminada :D \n");
+	printf("+-- Intro EXTI --+");
 
 	while(1){
 		FSM_update(Current_State);
@@ -335,7 +341,7 @@ void initSysTick(void){
 	//Se configura el Systick
 	systick.pSysTickx								= SysTick;
 	systick.SysTickConfig.SYSTICK_ClockSource		= SYSTICK_CLOCK_SOURCE_PROCCESSOR;
-	systick.SysTickConfig.SYSTICK_ReloadValue		= 16000000; //Interrupción cada s
+	systick.SysTickConfig.SYSTICK_ReloadValue		= 16000; //Interrupción cada ms
 	systick.SysTickConfig.SYSTICK_InterruptEnable	= SYSTICK_TICKINT_ENABLED;
 	//Se carga la configuración
 	systick_Config(&systick);
@@ -532,7 +538,7 @@ void displaySieteSegmentos(short digito){
 
 void FSM_update(State_t State){
 	switch (State){
-		case STATE_IDLE:{
+		case STATE_REFRESH:{
 			if(digito > 3){	//Si se quiere prender el digito 4 (No existe) se devuelve al digito 0
 				digito = 0;
 			}
@@ -543,11 +549,11 @@ void FSM_update(State_t State){
 			if (Current_Color == ROJO_VERDE_AZUL ){	//Si se hace una interrupción y el estado es el final
 				Current_Color = APAGADO;			//Se vuelve al estado apagado
 				cambioEstadoLEDRGB(Current_Color);	//Se muestra el estado apagado
-				Current_State = STATE_IDLE;			//Se vuelve al estado IDLE
+				Current_State = STATE_REFRESH;			//Se vuelve al estado IDLE
 			}else{
 				Current_Color++;					//De otra forma, se cambia al siguiente estado
 				cambioEstadoLEDRGB(Current_Color);	//Se muestra el color del estado
-				Current_State = STATE_IDLE;			//Se vuelve al estado IDLE
+				Current_State = STATE_REFRESH;			//Se vuelve al estado IDLE
 			}
 			break;
 		}case STATE_TAXIMETER_FEEDBACK :{
@@ -566,22 +572,23 @@ void FSM_update(State_t State){
 			}
 			separarContador();	//Se separan los miles, centenas, decenas, unidades del nuevo número en el contador para
 								//Mostrarlos posteriormente
-			Current_State = STATE_IDLE;//Se cambia al estado IDLE para que se muestre los números del contador
+			Current_State = STATE_REFRESH;//Se cambia al estado IDLE para que se muestre los números del contador
 			break;
 		}
 	}
 }
 
-void callback_ExtInt0(void){	//función callback para el EXTI0
+void callback_ExtInt0(void){	//función callback para el EXTI0 (Switch)
+	printf("Tiempo en ms: %ld", contador_Tiempo);
 	Current_State = STATE_RGB_FEEDBACK;	//Al identificar un flanco de subida en el switch se cambia al estado RGB
 }
 
-void callback_ExtInt1(void){	//función callback para el EXTI1
+void callback_ExtInt1(void){	//función callback para el EXTI1 (Encoder)
 	Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
 }
 
 void timer2_Callback(void){		//función callback para el Timer2
-	//gpio_TooglePin(&userLed);	//La interrupción solamente hace un blinky para el led de estado
+	gpio_TooglePin(&userLed);	//La interrupción solamente hace un blinky para el led de estado
 }
 
 void timer3_Callback(void){		//función callback para el TImer3, la cual lleva el refresco indepenediente del 7 segmentos de 4 digitos
@@ -589,7 +596,6 @@ void timer3_Callback(void){		//función callback para el TImer3, la cual lleva e
 }
 
 void SysTick_Callback(void){
-	gpio_TooglePin(&userLed);
 	contador_Tiempo++;
 }
 

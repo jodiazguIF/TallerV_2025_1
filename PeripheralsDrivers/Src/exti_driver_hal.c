@@ -659,12 +659,90 @@ static void exti_select_edge(EXTI_Handler_t *extiConfig){
 			EXTI->RTSR |= (EXTI_RTSR_TR15);
 		}
 		//Se han configurado los pines para el trigger con rising edge
+	}else if(extiConfig->edgeType == EXTERNAL_INTERRUPT_BOTH){
+		if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_0){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR0_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR0_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR0);
+		    EXTI->FTSR |= (EXTI_FTSR_TR0);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_1){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR1_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR1_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR1);
+		    EXTI->FTSR |= (EXTI_FTSR_TR1);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_2){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR2_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR2_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR2);
+		    EXTI->FTSR |= (EXTI_FTSR_TR2);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_3){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR3_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR3_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR3);
+		    EXTI->FTSR |= (EXTI_FTSR_TR3);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_4){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR4_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR4_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR4);
+		    EXTI->FTSR |= (EXTI_FTSR_TR4);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_5){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR5_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR5_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR5);
+		    EXTI->FTSR |= (EXTI_FTSR_TR5);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_6){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR6_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR6_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR6);
+		    EXTI->FTSR |= (EXTI_FTSR_TR6);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_7){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR7_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR7_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR7);
+		    EXTI->FTSR |= (EXTI_FTSR_TR7);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_8){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR8_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR8_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR8);
+		    EXTI->FTSR |= (EXTI_FTSR_TR8);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_9){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR9_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR9_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR9);
+		    EXTI->FTSR |= (EXTI_FTSR_TR9);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_10){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR10_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR10_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR10);
+		    EXTI->FTSR |= (EXTI_FTSR_TR10);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_11){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR11_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR11_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR11);
+		    EXTI->FTSR |= (EXTI_FTSR_TR11);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_12){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR12_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR12_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR12);
+		    EXTI->FTSR |= (EXTI_FTSR_TR12);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_13){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR13_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR13_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR13);
+		    EXTI->FTSR |= (EXTI_FTSR_TR13);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_14){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR14_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR14_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR14);
+		    EXTI->FTSR |= (EXTI_FTSR_TR14);
+		}else if(extiConfig->pGPIOHandler->pinConfig.GPIO_PinNumber == PIN_15){
+		    EXTI->RTSR &= ~(1 << EXTI_RTSR_TR15_Pos);
+		    EXTI->FTSR &= ~(1 << EXTI_FTSR_TR15_Pos);
+		    EXTI->RTSR |= (EXTI_RTSR_TR15);
+		    EXTI->FTSR |= (EXTI_FTSR_TR15);
+		}
 
 	}
-	/*
-	else if(extiConfig->edgeType == EXTERNAL_INTERRUPT_BOTH){	//Esta cosa la intentaré plantear luego
-
-	}*/
 }
 
 /*
