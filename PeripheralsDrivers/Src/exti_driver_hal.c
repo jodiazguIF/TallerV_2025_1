@@ -19,6 +19,7 @@ static void exti_config_interrupt(EXTI_Handler_t *extiConfig);
  * Requiere que un pinX ya se encuentre configurado como
  * entrada digital
  * */
+
 void exti_Config(EXTI_Handler_t *extiConfig){
 
 	/* 1.0 Se carga la configuración, que debe ser el PINx como entrada "simple" */
@@ -34,13 +35,13 @@ void exti_Config(EXTI_Handler_t *extiConfig){
 	exti_select_edge(extiConfig);
 
 	/* 5.0 Desactivo primero las interrupciones globales */
-	/*Agregue su código acá*/
+	__disable_irq();
 
 	/* 6. 0 Manejo de Interrupciones */
 	exti_config_interrupt(extiConfig);
 
 	/* 7.0 Volvemos a activar las interrupciones globales */
-	/*Agregue su código acá*/
+	__enable_irq();
 }
 
 /*

@@ -43,6 +43,7 @@ void timer_Config(Timer_Handler_t *pTimerHandler){
 
 	//0. Desativamos las interrupciones globales mientras configuramos el sistema
 	__disable_irq();
+
 	//1. Activar la señal de reloj del periférico requerido
 	timer_enable_clock_peripheral(pTimerHandler);
 
@@ -58,7 +59,7 @@ void timer_Config(Timer_Handler_t *pTimerHandler){
 	//5.Configuramos la interrupción
 	timer_config_interrupt(pTimerHandler);
 
-	//x. Volvemos a activar las interrupciones del sistema
+	//6. Volvemos a activar las interrupciones del sistema
 	__enable_irq();
 
 	//EL timer inicia apagado
