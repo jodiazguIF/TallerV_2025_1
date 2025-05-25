@@ -19,7 +19,8 @@
 typedef enum{
 	STATE_REFRESH,
 	STATE_RGB_FEEDBACK,
-	STATE_TAXIMETER_FEEDBACK
+	STATE_TAXIMETER_FEEDBACK,
+	STATE_CHANGE_REFRESH,
 } State_t;
 State_t Current_State = STATE_REFRESH; // Se fija el estado por defecto
 
@@ -40,7 +41,7 @@ RGB_Color_t Current_Color = APAGADO;	//Se fija el estado inicial
 //Variable que lleva el contador completo del taxímetro
 uint16_t contador_Taximetro = 0000;
 //Variable que lleva el dato del dígito que se enciende en el taxímetro
-short digito = 0;
+uint8_t digito = 0;
 //Se inicializa una variable que lleva el tiempo en ms que ha pasado desde el inicio
 uint32_t contador_Tiempo = 0;
 
@@ -60,6 +61,12 @@ EXTI_Handler_t exti_SwitchPin = {0};
 GPIO_Handler_t gpio_CLKPin = {0};
 EXTI_Handler_t exti_CLKPin = {0};
 GPIO_Handler_t gpio_DATAPin = {0};
+
+//Pines para los botones que modifica la tasa de refresco
+GPIO_Handler_t gpio_BotonTasaRefrescoIncremento = {0};
+EXTI_Handler_t exti_BotonTasaRefrescoIncremento = {0};
+GPIO_Handler_t gpio_BotonTasaRefrescoDecremento = {0};
+EXTI_Handler_t exti_BotonTasaRefrescoDecremento = {0};
 
 
 //Se definen los pines de los 7 segmentos
@@ -91,7 +98,7 @@ Timer_Handler_t taxiTimer = {0};
 SysTick_Handler_t systick = {0};
 
 
-//Funciones que se usan en el main
+//Prototipos de funciones que se usan en el main
 void initPortPin(void);
 void initTimers(void);
 void initEXTI(void);
@@ -282,10 +289,10 @@ void initPortPin(void){
 	gpio_WritePin(&RGB_AZUL, RESET);
 
 	//Se configura el pin del Data
-	gpio_DATAPin.pGPIOx									= GPIOB;
-	gpio_DATAPin.pinConfig.GPIO_PinNumber				= PIN_2;
-	gpio_DATAPin.pinConfig.GPIO_PinMode					= GPIO_MODE_IN;
-	gpio_DATAPin.pinConfig.GPIO_PinPuPdControl			= GPIO_PUPDR_NOTHING;
+	gpio_DATAPin.pGPIOx							= GPIOB;
+	gpio_DATAPin.pinConfig.GPIO_PinNumber		= PIN_2;
+	gpio_DATAPin.pinConfig.GPIO_PinMode			= GPIO_MODE_IN;
+	gpio_DATAPin.pinConfig.GPIO_PinPuPdControl	= GPIO_PUPDR_NOTHING;
 	gpio_Config(&gpio_DATAPin);
 
 }
@@ -335,6 +342,29 @@ void initEXTI(void){
 	gpio_Config(&gpio_CLKPin);
 	exti_Config(&exti_CLKPin);
 
+	//Configuramos el pin que lleva el incremento del refresco (mas rápido)
+	gpio_BotonTasaRefrescoIncremento.pGPIOx							= GPIOA;
+	gpio_BotonTasaRefrescoIncremento.pinConfig.GPIO_PinNumber		= PIN_4;
+	gpio_BotonTasaRefrescoIncremento.pinConfig.GPIO_PinMode			= GPIO_MODE_IN;
+	gpio_BotonTasaRefrescoIncremento.pinConfig.GPIO_PinPuPdControl	= GPIO_PUPDR_NOTHING;
+	//Se configura el EXTI
+	exti_BotonTasaRefrescoIncremento.pGPIOHandler					= &gpio_BotonTasaRefrescoIncremento;
+	exti_BotonTasaRefrescoIncremento.edgeType						= EXTERNAL_INTERRUPT_FALLING_EDGE;
+	//Se incializa
+	gpio_Config(&gpio_BotonTasaRefrescoIncremento);
+	exti_Config(&exti_BotonTasaRefrescoIncremento);
+
+	//Configuramo el pin que lleva el decremento del refresco (mas lento)
+	gpio_BotonTasaRefrescoDecremento.pGPIOx							= GPIOB;
+	gpio_BotonTasaRefrescoDecremento.pinConfig.GPIO_PinNumber		= PIN_15;
+	gpio_BotonTasaRefrescoDecremento.pinConfig.GPIO_PinMode			= GPIO_MODE_IN;
+	gpio_BotonTasaRefrescoDecremento.pinConfig.GPIO_PinPuPdControl	= GPIO_PUPDR_NOTHING;
+	//Se configura el EXTI
+	exti_BotonTasaRefrescoDecremento.pGPIOHandler					= &gpio_BotonTasaRefrescoDecremento;
+	exti_BotonTasaRefrescoDecremento.edgeType						= EXTERNAL_INTERRUPT_FALLING_EDGE;
+	//Se incializa
+	gpio_Config(&gpio_BotonTasaRefrescoDecremento);
+	exti_Config(&exti_BotonTasaRefrescoDecremento);
 }
 
 void initSysTick(void){
@@ -510,7 +540,7 @@ void setNumeroSieteSegmentos(uint8_t numero){
 	}
 }
 
-void displaySieteSegmentos(short digito){
+void displaySieteSegmentos(uint8_t digito){
 	switch (digito){
 		case 0 :{
 			gpio_WritePin(&DigitoD3, SET);							//Se desactiva el digito anterior
@@ -574,9 +604,24 @@ void FSM_update(State_t State){
 								//Mostrarlos posteriormente
 			Current_State = STATE_REFRESH;//Se cambia al estado IDLE para que se muestre los números del contador
 			break;
+		}case STATE_CHANGE_REFRESH :{
+			timer_SetState(&taxiTimer, TIMER_OFF);		//Se apaga el Timer para configurarlo
+			if(taxiTimer.TIMx_Config.TIMx_Period >= 4){  	//Se verifica si el valor que entra es válido
+				//En el caso de que sí, entonces:
+				timer_Config(&taxiTimer);					//La variable ya fue modificada y se carga a la configuración del timer
+				timer_SetState(&taxiTimer, TIMER_ON);
+				Current_State = STATE_REFRESH;				//Volvemos al estado de Refresh ahora con una velocidad más rápida
+			}else{											//El decremento es inválido
+				taxiTimer.TIMx_Config.TIMx_Period	+= 5;	// El periodo del timer vuelve a su valor de 5ms
+				timer_SetState(&taxiTimer, TIMER_ON);		//Se vuelve a encender el Timer
+				Current_State = STATE_REFRESH;				//Se vuelve al estado de REFRESCO
+			}
+			timer_SetState(&taxiTimer, TIMER_ON);		//Se vuelve a encender el Timer «»
+			break;
 		}
 	}
 }
+
 
 void callback_ExtInt0(void){	//función callback para el EXTI0 (Switch)
 	printf("Tiempo en ms: %ld", contador_Tiempo);
@@ -585,6 +630,16 @@ void callback_ExtInt0(void){	//función callback para el EXTI0 (Switch)
 
 void callback_ExtInt1(void){	//función callback para el EXTI1 (Encoder)
 	Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
+}
+
+void callback_ExtInt4(void){
+	taxiTimer.TIMx_Config.TIMx_Period	-= 5; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
+	Current_State = STATE_CHANGE_REFRESH;
+}
+
+void callback_ExtInt15(void){
+	taxiTimer.TIMx_Config.TIMx_Period	+= 5;	//Modificamos el valor del periodo del timer, decrementando la velocidad
+	Current_State = STATE_CHANGE_REFRESH;
 }
 
 void timer2_Callback(void){		//función callback para el Timer2
