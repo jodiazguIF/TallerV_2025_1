@@ -242,7 +242,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 16000;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 5;
+  htim3.Init.Period = 4;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -667,17 +667,16 @@ void FSM_update(State_t State){
 			break;
 		}case STATE_CHANGE_REFRESH :{
 			HAL_TIM_Base_Stop_IT(&htim3); 					//Se apaga el Timer 3 para configurarlo
-			if(htim3.Init.Period >= 4){  					//Se verifica si el valor que entra es válido
+			if((htim3.Init.Period >= 4) & (htim3.Init.Period <= 1000)){  					//Se verifica si el valor que entra es válido
 				//En el caso de que sí, entonces:
 				HAL_TIM_Base_Init(&htim3);					//La variable ya fue modificada y se carga a la configuración del timer
 				HAL_TIM_Base_Start_IT(&htim3);
 				Current_State = STATE_REFRESH;				//Volvemos al estado de Refresh ahora con una velocidad más rápida
 			}else{											//El decremento es inválido
-				htim3.Init.Period += 5;						// El periodo del timer vuelve a su valor de 5ms
+				htim3.Init.Period = 4;						// El periodo del timer vuelve a su valor de 5ms
 				HAL_TIM_Base_Start_IT(&htim3);				//Se vuelve a encender el Timer
 			    Current_State = STATE_REFRESH;				//Se vuelve al estado de REFRESCO
 			}
-			HAL_TIM_Base_Start_IT(&htim3);					//Se vuelve a encender el Timer «»
 			break;
 		}
 	}
@@ -698,10 +697,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	}else if(GPIO_Pin == Clk_Encoder_Pin){
 		Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
 	}else if(GPIO_Pin == BotonTasaRefrescoDecremento_Pin){
-		htim3.Init.Period	+= 5; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
+		htim3.Init.Period	+= 10; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
 		Current_State = STATE_CHANGE_REFRESH;
 	}else if(GPIO_Pin == BotonTasaRefrescoIncremento_Pin){
-		htim3.Init.Period	-= 5; 	//Modificamos el valor del periodo del timer, disminuyendo la velocidad
+		htim3.Init.Period	-= 10; 	//Modificamos el valor del periodo del timer, disminuyendo la velocidad
 		Current_State = STATE_CHANGE_REFRESH;
 
 	}

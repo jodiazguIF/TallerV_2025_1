@@ -570,17 +570,17 @@ void FSM_update(State_t State){
 			break;
 		}case STATE_CHANGE_REFRESH :{
 			timer_SetState(&taxiTimer, TIMER_OFF);		//Se apaga el Timer para configurarlo
-			if(taxiTimer.TIMx_Config.TIMx_Period >= 4){  	//Se verifica si el valor que entra es válido
+			if((taxiTimer.TIMx_Config.TIMx_Period >= 4) & (taxiTimer.TIMx_Config.TIMx_Period <= 1000)){  	//Se verifica si el valor que entra es válido
 				//En el caso de que sí, entonces:
 				timer_Config(&taxiTimer);					//La variable ya fue modificada y se carga a la configuración del timer
 				timer_SetState(&taxiTimer, TIMER_ON);
 				Current_State = STATE_REFRESH;				//Volvemos al estado de Refresh ahora con una velocidad más rápida
 			}else{											//El decremento es inválido
-				taxiTimer.TIMx_Config.TIMx_Period	+= 5;	// El periodo del timer vuelve a su valor de 5ms
+				taxiTimer.TIMx_Config.TIMx_Period	= 5;	// El periodo del timer vuelve a su valor de 5ms
 				timer_SetState(&taxiTimer, TIMER_ON);		//Se vuelve a encender el Timer
 				Current_State = STATE_REFRESH;				//Se vuelve al estado de REFRESCO
 			}
-			timer_SetState(&taxiTimer, TIMER_ON);		//Se vuelve a encender el Timer «»
+			timer_SetState(&taxiTimer, TIMER_ON);		//Se vuelve a encender el Timer
 			break;
 		}
 	}
