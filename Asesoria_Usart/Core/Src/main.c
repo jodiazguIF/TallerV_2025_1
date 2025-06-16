@@ -97,7 +97,7 @@ int main(void)
   MX_TIM2_Init();
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_UART_Transmit(&huart2, (uint8_t*)"Hello from USART2!\r\n", 21, 100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -303,6 +303,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM2){
 		HAL_GPIO_TogglePin(UserLed_GPIO_Port, UserLed_Pin); // UserLed parpadea cada 250ms

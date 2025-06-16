@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "stm32f4xx.h"
-#include "stm32_assert.h"
 #include "gpio_driver_hal.h"
 #include "timer_driver_hal.h"
 #include "exti_driver_hal.h"
@@ -597,12 +596,12 @@ void callback_ExtInt1(void){	//función callback para el EXTI1 (Encoder)
 }
 
 void callback_ExtInt4(void){
-	taxiTimer.TIMx_Config.TIMx_Period	-= 5; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
+	taxiTimer.TIMx_Config.TIMx_Period	-= 10; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
 	Current_State = STATE_CHANGE_REFRESH;
 }
 
 void callback_ExtInt15(void){
-	taxiTimer.TIMx_Config.TIMx_Period	+= 5;	//Modificamos el valor del periodo del timer, decrementando la velocidad
+	taxiTimer.TIMx_Config.TIMx_Period	+= 10;	//Modificamos el valor del periodo del timer, decrementando la velocidad
 	Current_State = STATE_CHANGE_REFRESH;
 }
 
