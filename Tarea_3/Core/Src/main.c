@@ -21,7 +21,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdint.h"
+#include "string.h"
+#include "stdio.h"
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,10 +43,15 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 State_t Current_State = STATE_REFRESH; // Se fija el estado por defecto
@@ -62,17 +70,30 @@ uint8_t miles_contador_Taximetro 	= 0;
 uint8_t centenas_contador_Taximetro = 0;
 uint8_t decenas_contador_Taximetro 	= 0;
 uint8_t unidades_contador_Taximetro = 0;
+
+//Variables auxiliares para la comunciación USART
+uint16_t rx_buffer_length = 64;
+uint8_t rx_Buffer[RX_BUFFER_MAX_LENGTH]; // Buffer de recepción
+uint16_t data_Length = 0; // Longitud de los datos recibidos
+char rx_String[RX_BUFFER_MAX_LENGTH]; // Cadena de recepción
+char last_rx_String[RX_BUFFER_MAX_LENGTH]; // Cadena de recepción anterior
+
+uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
+uint16_t ADC_Buffer_Length = 2048; // Longitud del array del ADC
+uint16_t ADC_Value = 0; // Valor del ADC actual
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
+void printHelp(void);
 void FSM_update(State_t State);
-void configMagic(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -109,19 +130,23 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2); // Inicia el Timer 2 para interrupciones
   HAL_TIM_Base_Start_IT(&htim3); // Inicia el Timer 3 para interrupciones
+
   HAL_GPIO_WritePin(DigitoD0_GPIO_Port, DigitoD0_Pin, GPIO_PIN_SET); // Apagamos todos los digitos para evitar el fantasma
-  HAL_GPIO_WritePin(DigitoD1_GPIO_Port, DigitoD1_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(DigitoD2_GPIO_Port, DigitoD2_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(DigitoD3_GPIO_Port, DigitoD3_Pin, GPIO_PIN_SET);
-  configMagic();
-  printf("Configuración Terminada :D \n");
-  printf("+-- Intro EXTI --+");
+  HAL_GPIO_WritePin(DigitoD1_GPIO_Port, DigitoD1_Pin, GPIO_PIN_SET); // Buuuu
+  HAL_GPIO_WritePin(DigitoD2_GPIO_Port, DigitoD2_Pin, GPIO_PIN_SET); // Buuuu
+  HAL_GPIO_WritePin(DigitoD3_GPIO_Port, DigitoD3_Pin, GPIO_PIN_SET); // Buuuu
+
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer, rx_buffer_length); // Configura la recepción DMA
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); // Inicia el ADC en modo DMA
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,6 +156,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  FSM_update(Current_State); // Llama a la función de actualización del FSM
+
   }
   /* USER CODE END 3 */
 }
@@ -174,6 +200,58 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -300,6 +378,29 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -334,11 +435,11 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, DigitoD0_Pin|RGB_ROJO_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  /*Configure GPIO pins : Switch_Encoder_Pin Clk_Encoder_Pin */
+  GPIO_InitStruct.Pin = Switch_Encoder_Pin|Clk_Encoder_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : UserLed_Pin */
   GPIO_InitStruct.Pin = UserLed_Pin;
@@ -346,12 +447,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(UserLed_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : Switch_Encoder_Pin Clk_Encoder_Pin */
-  GPIO_InitStruct.Pin = Switch_Encoder_Pin|Clk_Encoder_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BotonTasaRefrescoIncremento_Pin */
   GPIO_InitStruct.Pin = BotonTasaRefrescoIncremento_Pin;
@@ -409,9 +504,6 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-
   HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
@@ -627,6 +719,20 @@ void displaySieteSegmentos(uint8_t digito){
 	}
 }
 
+void printHelp(void){
+	//Esta función imprime el menú de opciones en el terminal
+	HAL_UART_Transmit(&huart2, (uint8_t*)"Opciones:\n", strlen("Opciones:\n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"1. Encender LED RGB:                          RGB_ON \n", strlen("1. Encender LED RGB:                          RGB_ON \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"2. Apagar LED RGB:                            RGB_OFF \n", strlen("2. Apagar LED RGB:                            RGB_OFF \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"3. Configurar periodo del Blinky:             Config_Blinky_Period \n", strlen("3. Configurar periodo del Blinky:             Config_Blinky_Period \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"4. Configurar tiempo de muestreo de la señal: Config_Sampling_Time \n", strlen("4. Configurar tiempo de muestreo de la señal: Config_Sampling_Time \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"5. Configurar tamaño de la FFT:               Config_FFT_Size \n", strlen("5. Configurar tamaño de la FFT:               Config_FFT_Size \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"6. Imprimir señal ADC (raw):                  Print_ADC \n", strlen("6. Imprimir señal ADC (raw):                  Print_ADC \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"7. Imprimir espectro de la FFT:               Print_FFT \n", strlen("7. Imprimir espectro de la FFT:               Print_FFT \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"8. Imprimir configuración del equipo:         Print_Config \n", strlen("8. Imprimir configuración del equipo:         Print_Config \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, (uint8_t*)"9. Imprimir valores importantes FFT:          Print_FFT_Features \n", strlen("9. Imprimir valores importantes FFT:          Print_FFT_Features \n"), HAL_MAX_DELAY);
+}
+
 void FSM_update(State_t State){
 	switch (State){
 		case STATE_REFRESH:{
@@ -678,6 +784,87 @@ void FSM_update(State_t State){
 			    Current_State = STATE_REFRESH;				//Se vuelve al estado de REFRESCO
 			}
 			break;
+		}case STATE_TERMINAL_FEEDBACK :{
+			//Este estado se encarga de recibir los comandos del terminal y ejecutar las acciones correspondiente
+			//Primero se limpian los caracteres de nueva línea y retorno de carro del string recibido
+			for (int i = 0; i < data_Length; i++) {
+			    if (rx_String[i] == '\r' || rx_String[i] == '\n') {
+			        rx_String[i] = '\0';
+			        break;
+			    }
+			}
+
+			//Luego se evalúan los comandos recibidos y se atienden adecuadamente
+			if (strcmp(rx_String, "help") == 0) { // Si el comando es "help"
+				printHelp(); // Imprime las opciones disponibles
+
+			} else if (strcmp(rx_String, "RGB_ON") == 0) {
+				Current_Color = ROJO_VERDE_AZUL; // Cambia al estado RGB_ON
+				cambioEstadoLEDRGB(Current_Color); // Cambia el estado del LED RGB
+
+			} else if (strcmp(rx_String, "RGB_OFF") == 0) {
+				Current_Color = APAGADO; // Cambia al estado RGB_OFF
+				cambioEstadoLEDRGB(Current_Color); // Cambia el estado del LED RGB
+
+			} else if (strcmp(rx_String, "Config_Blinky_Period") == 0) {
+				/*
+				 * Se envía un mensaje por el terminal, para darle feedback al usuario
+				 * Se usa una variable last_rx_String para saber en qué comando se está
+				 * Con el fin de evitar que se detenga el 7 segmentos y aún así poder
+				 * Escribir el nuevo periodo del Blinky, los mismo para los otros comandos
+				 */
+
+				HAL_UART_Transmit(&huart2, (uint8_t*)"Ingrese el nuevo periodo del Blinky: ", strlen("Ingrese el nuevo periodo del Blinky: "), HAL_MAX_DELAY);
+
+			}else if (strcmp(rx_String, "Config_Sampling_Time") == 0) {
+				HAL_UART_Transmit(&huart2, (uint8_t*)"Ingrese el nuevo tiempo de muestreo: ", strlen("Ingrese el nuevo tiempo de muestreo: "), HAL_MAX_DELAY);
+				// Aquí se podría implementar la lógica para recibir un nuevo tiempo de muestreo
+
+			} else if (strcmp(rx_String, "Config_FFT_Size") == 0) {
+				HAL_UART_Transmit(&huart2, (uint8_t*)"Ingrese el nuevo tamaño de la FFT: ", strlen("Ingrese el nuevo tamaño de la FFT: "), HAL_MAX_DELAY);
+				// Aquí se podría implementar la lógica para recibir un nuevo tamaño de FFT
+
+			} else if (strcmp(rx_String, "Print_ADC") == 0) {
+				HAL_UART_Transmit(&huart2, (uint8_t*)"Imprimiendo señal ADC...\n", strlen("Imprimiendo señal ADC...\n"), HAL_MAX_DELAY);
+				// Aquí se podría implementar la lógica para imprimir la señal ADC
+
+			} else if (strcmp(rx_String, "Print_FFT") == 0) {
+				HAL_UART_Transmit(&huart2, (uint8_t*)"Imprimiendo espectro de la FFT...\n", strlen("Imprimiendo espectro de la FFT...\n"), HAL_MAX_DELAY);
+				// Aquí se podría implementar la lógica para imprimir el espectro
+
+			}else if(strcmp(last_rx_String, "Config_Blinky_Period") == 0) {
+				Current_State = STATE_BLINKY_CONFIG; 	// Cambia al estado de configuración del Blinky
+				break;
+
+			}else if(strcmp(last_rx_String, "Config_Sampling_Time") == 0) {
+				Current_State = STATE_SAMPLING_TIME_CONFIG; // Cambia al estado de configuración del tiempo de muestreo
+				break;
+			}
+
+			strcpy(last_rx_String, rx_String); 		 // Copia adecuadamente el último comando recibido
+			Current_State = STATE_REFRESH; // Se vuelve al estado de REFRESH
+			break;
+
+		}case STATE_BLINKY_CONFIG :{
+			// Inside case STATE_BLINKY_CONFIG:
+			char *endptr;			//Puntero para verificar la conversión de string a entero
+			long period = strtol(rx_String, &endptr, 10);	// Función para convertir el string a entero, parámetros de entrada:  el string a convertir, un puntero para verificar la conversión, y la base (10 para decimal)
+
+			// Check if the input is a valid integer and within timer limits
+			if (*endptr == '\0' && period >= 1 && period <= 15999) {
+				HAL_TIM_Base_Stop_IT(&htim2);
+				htim2.Init.Period = (uint32_t)period;
+				HAL_TIM_Base_Init(&htim2);
+				HAL_TIM_Base_Start_IT(&htim2);
+				Current_State = STATE_REFRESH;
+			} else {
+				HAL_UART_Transmit(&huart2, (uint8_t*)"Periodo inválido. Debe ser un número entre 1 y 15999.\n", strlen("Periodo inválido. Debe ser un número entre 1 y 15999.\n"), HAL_MAX_DELAY);
+				Current_State = STATE_REFRESH; // Volver al estado de configuración del Blinky
+			}
+			break;
+		}case STATE_SAMPLING_TIME_CONFIG :{
+
+			break;
 		}
 	}
 }
@@ -692,7 +879,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == Switch_Encoder_Pin){ // Botón del encoder
-		printf("Tiempo en ms: %ld", contador_Tiempo);
 		Current_State = STATE_RGB_FEEDBACK;	//Al identificar un flanco de subida en el switch se cambia al estado RGB
 	}else if(GPIO_Pin == Clk_Encoder_Pin){
 		Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
@@ -706,6 +892,27 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	}
 }
 
+//Callback del USART Idle para no tener que saber el tamaño del mensaje
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+	if (huart->Instance == USART2) {
+		//1. Se guarda el largo del mensaje recibido
+		data_Length = Size; // Se guarda el tamaño del mensaje recibido
+
+		//2. Copiamos los datos del rx_DmaBuffer al buffer de recepción
+		memcpy(rx_String, rx_Buffer, Size); // Copia los datos recibidos al buffer de string (Donde se va a copiar el string, de donde se copia, cuántos bytes en este caso, el size recibido)
+		rx_String[Size] = '\0'; 			// Aseguramos que el string esté terminado en nulo para que sí sea un string
+		Current_State = STATE_TERMINAL_FEEDBACK;
+
+		//La interrupción se desahiblita tras la llamada del callback, por lo que se vuelve a habilitar
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, rx_Buffer, rx_buffer_length); // Configura la recepción DMA
+	}
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+	ADC_Value =  ADC_Buffer[ADC_Buffer_Length-1]; // Se obtiene el valor del ADC al finalizar la conversión
+	HAL_ADC_Start_DMA(hadc, (uint32_t*)ADC_Buffer, ADC_Buffer_Length); // Se reinicia la conversión del ADC
+}
 /* USER CODE END 4 */
 
 /**

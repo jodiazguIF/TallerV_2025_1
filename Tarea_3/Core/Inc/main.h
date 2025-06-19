@@ -31,7 +31,9 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdint.h"
+#include "string.h"
+#include "stdio.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -42,6 +44,11 @@ typedef enum{
 	STATE_RGB_FEEDBACK,
 	STATE_TAXIMETER_FEEDBACK,
 	STATE_CHANGE_REFRESH,
+	STATE_TERMINAL_FEEDBACK,
+	STATE_BLINKY_CONFIG,
+	STATE_SAMPLING_TIME_CONFIG,
+	STATE_FFT_SIZE_CONFIG,
+
 } State_t;
 
 //Se definen los estados finitos que puede tener el led RGB
@@ -75,21 +82,16 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define B1_Pin GPIO_PIN_13
-#define B1_GPIO_Port GPIOC
-#define B1_EXTI_IRQn EXTI15_10_IRQn
+#define Switch_Encoder_Pin GPIO_PIN_13
+#define Switch_Encoder_GPIO_Port GPIOC
+#define Switch_Encoder_EXTI_IRQn EXTI15_10_IRQn
 #define UserLed_Pin GPIO_PIN_1
 #define UserLed_GPIO_Port GPIOH
-#define Switch_Encoder_Pin GPIO_PIN_0
-#define Switch_Encoder_GPIO_Port GPIOC
-#define Switch_Encoder_EXTI_IRQn EXTI0_IRQn
 #define Clk_Encoder_Pin GPIO_PIN_1
 #define Clk_Encoder_GPIO_Port GPIOC
 #define Clk_Encoder_EXTI_IRQn EXTI1_IRQn
-#define USART_TX_Pin GPIO_PIN_2
-#define USART_TX_GPIO_Port GPIOA
-#define USART_RX_Pin GPIO_PIN_3
-#define USART_RX_GPIO_Port GPIOA
+#define ADC_SENAL_Pin GPIO_PIN_1
+#define ADC_SENAL_GPIO_Port GPIOA
 #define BotonTasaRefrescoIncremento_Pin GPIO_PIN_4
 #define BotonTasaRefrescoIncremento_GPIO_Port GPIOA
 #define BotonTasaRefrescoIncremento_EXTI_IRQn EXTI4_IRQn
@@ -134,6 +136,8 @@ void Error_Handler(void);
 #define RGB_ROJO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define RX_BUFFER_MAX_LENGTH 64
+#define ADC_BUFFER_MAX_LENGTH 2048
 
 /* USER CODE END Private defines */
 
