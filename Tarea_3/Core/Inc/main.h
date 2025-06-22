@@ -45,23 +45,69 @@ typedef enum{
 	STATE_TAXIMETER_FEEDBACK,
 	STATE_CHANGE_REFRESH,
 	STATE_TERMINAL_FEEDBACK,
-	STATE_BLINKY_CONFIG,
-	STATE_SAMPLING_TIME_CONFIG,
-	STATE_FFT_SIZE_CONFIG,
-
 } State_t;
 
-//Se definen los estados finitos que puede tener el led RGB
-typedef enum{
-	APAGADO,
-	ROJO,
-	VERDE,
-	AZUL,
-	AZUL_VERDE,
-	AZUL_ROJO,
-	ROJO_VERDE,
-	ROJO_VERDE_AZUL,
-}RGB_Color_t ;
+//Se definen los estados finitos que puede tener el led RGB a través de una variable de 8 bits sin signo
+typedef enum {
+    RGB_OFF 		= 0b000,
+    RGB_ROJO 		= 0b001,
+    RGB_VERDE 		= 0b010,
+    RGB_AZUL 		= 0b100,
+    RGB_AZUL_VERDE 	= 0b110,
+    RGB_AZUL_ROJO	= 0b101,
+    RGB_ROJO_VERDE 	= 0b011,
+    RGB_ON 			= 0b111
+} RGB_Color_t;
+
+// Se definen las máscaras que se usarán para modificar el estado del LED RGB
+#define RGB_RED_MASK   (1 << 0) 	//Mascara para modificar el LED Rojo del RGB
+#define RGB_GREEN_MASK (1 << 1)		//Mascara para modificar el LED Verde del RGB
+#define RGB_BLUE_MASK  (1 << 2)		//Mascara para modificar el LED Azul del RGB
+
+
+typedef void (*function_t)(const char *args); // Definición de un puntero a función que recibe un string como argumento
+//Definimos una estructura que contiene el nombre del comando y la función asociada
+
+typedef struct {
+	const char *command_name; 		// Nombre del comando
+	const char *help; 				// Descripción del comando
+	function_t handler;				// Puntero a la función asociada al comando
+} Entrada_Comando_t;
+
+//Declaramos los prototipos de las funciones que se usarán en el programa
+static void printhelp(void);
+static void rgb_on(void);
+static void rgb_off(void);
+static void rgb_toogle_red(void);
+static void rgb_toogle_blue(void);
+static void rgb_toogle_green(void);
+static void config_blinky(const char *argumento);
+static void cfg_sample_rate(const char *argumento);
+static void cfg_size_fft(const char *argumento);
+static void print_adc(void);
+static void print_fft(void);
+static void print_config(void);
+static void print_fft_features(void);
+
+//también se crea una tabla de comandos que contiene los comandos disponibles
+
+static const Entrada_Comando_t comandos[] = {
+		{"help"						,"Muestra esta ayuda"					, printhelp},
+		{"RGB_ON"					,"Enciende el LED RGB"					, rgb_on},
+		{"RGB_OFF"					,"Apaga el LED RGB"						, rgb_off},
+		{"RGB_RED"					,"Toggle Led Rojo del RGB"				, rgb_toogle_red},
+		{"RGB_BLUE"					,"Toggle Led Azul del RGB"				, rgb_toogle_blue},
+		{"RGB_GREEN"				,"Toggle Led Verde del RGB"				, rgb_toogle_green},
+		{"Config_Blinky_Period"		,"Configura periodo blinky [1‑15999]"	, config_blinky},
+		{"Config_Sampling_Time"		,"Configura tiempo muestreo"			, cfg_sample_rate},
+		{"Config_FFT_Size"			,"Configura tamaño FFT"					, cfg_size_fft    },
+		{"Print_ADC"				,"Envía muestras ADC"					, print_adc  },
+		{"Print_FFT"				,"Envía espectro FFT"					, print_fft  },
+		{"Print_Config"				,"Imprime la configuración del equipo"	, print_config},
+		{"Print_FFT_Features"		,"Imprime valores importantes de la FFT", print_fft_features},
+};
+#define NUM_COMANDOS (sizeof(comandos) / sizeof(Entrada_Comando_t)) //Cantidad de comandos disponibles
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -73,6 +119,8 @@ typedef enum{
 /* USER CODE BEGIN EM */
 
 /* USER CODE END EM */
+
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
@@ -138,7 +186,6 @@ void Error_Handler(void);
 /* USER CODE BEGIN Private defines */
 #define RX_BUFFER_MAX_LENGTH 64
 #define ADC_BUFFER_MAX_LENGTH 2048
-
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

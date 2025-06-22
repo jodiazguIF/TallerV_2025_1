@@ -48,15 +48,28 @@ DMA_HandleTypeDef hdma_adc1;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
-State_t Current_State = STATE_REFRESH; // Se fija el estado por defecto
+State_t Current_State = STATE_REFRESH; 	// Se fija el estado por defecto
+RGB_Color_t Current_Color = 0;	//Se fija el estado inicial del LED RGB
+uint8_t secuencia_Color = 0; 	//Variable que lleva el contador de la secuencia del LED RGB
 
-RGB_Color_t Current_Color = APAGADO;	//Se fija el estado inicial del LED RGB
+// Se define una secuencia de colores para el LED RGB
+const uint8_t secuencia_RGB[] = {
+	0b0000,											// APAGADO
+    RGB_RED_MASK,                  					// ROJO
+    RGB_GREEN_MASK,               					// VERDE
+    RGB_BLUE_MASK,                					// AZUL
+    RGB_BLUE_MASK | RGB_GREEN_MASK,  				// AZUL-VERDE
+    RGB_BLUE_MASK | RGB_RED_MASK,    				// AZUL-ROJO
+    RGB_RED_MASK  | RGB_GREEN_MASK,  				// ROJO-VERDE
+    RGB_RED_MASK  | RGB_GREEN_MASK | RGB_BLUE_MASK 	// ROJO-VERDE-AZUL
+};
 
 //Variable que lleva el contador completo del taxímetro
 uint16_t contador_Taximetro = 0;
@@ -81,6 +94,24 @@ char last_rx_String[RX_BUFFER_MAX_LENGTH]; // Cadena de recepción anterior
 uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
 uint16_t ADC_Buffer_Length = 2048; // Longitud del array del ADC
 uint16_t ADC_Value = 0; // Valor del ADC actual
+
+//Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
+static const char help_msg[] =
+    "Opciones:\r\n"
+    "1.  Encender LED RGB:                           RGB_ON\r\n"
+    "2.  Apagar LED RGB:                             RGB_OFF\r\n"
+    "3.  Toggle LED RGB RED:                         RGB_RED\r\n"
+    "4.  Toggle LED RGB GREEN:                       RGB_GREEN\r\n"
+    "5.  Toggle LED RGB BLUE:                        RGB_BLUE\r\n"
+    "6.  Configurar periodo del Blinky:              Config_Blinky_Period\r\n"
+    "7.  Configurar tiempo de muestreo:              Config_Sampling_Time\r\n"
+    "8.  Configurar tamaño de la FFT:                Config_FFT_Size\r\n"
+    "9.  Imprimir señal ADC (raw):                   Print_ADC\r\n"
+    "10. Imprimir espectro FFT:                      Print_FFT\r\n"
+    "11. Imprimir configuración del equipo:          Print_Config\r\n"
+    "12. Imprimir valores clave de la FFT:           Print_FFT_Features\r\n";
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,6 +122,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 void printHelp(void);
 void FSM_update(State_t State);
@@ -135,6 +167,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_ADC1_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2); // Inicia el Timer 2 para interrupciones
   HAL_TIM_Base_Start_IT(&htim3); // Inicia el Timer 3 para interrupciones
@@ -228,8 +261,8 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ScanConvMode = DISABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T4_CC4;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
   hadc1.Init.DMAContinuousRequests = ENABLE;
@@ -341,6 +374,65 @@ static void MX_TIM3_Init(void)
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 16;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 1;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_OC4REF;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
+  HAL_TIM_MspPostInit(&htim4);
 
 }
 
@@ -640,59 +732,6 @@ void separarContador(void){
 	unidades_contador_Taximetro = contador_Taximetro % 10;
 }
 
-void cambioEstadoLEDRGB(RGB_Color_t Color){
-	switch (Color){
-		case APAGADO: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_RESET);
-			break;
-		}
-		case ROJO: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_RESET);
-			break;
-		}
-		case AZUL: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_RESET);
-			break;
-		}
-		case VERDE: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_SET);
-			break;
-		}
-		case AZUL_VERDE: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_SET);
-			break;
-		}
-		case AZUL_ROJO: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_RESET);
-			break;
-		}
-		case ROJO_VERDE: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_SET);
-			break;
-		}
-		case ROJO_VERDE_AZUL: {
-			HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_SET);
-			break;
-		}
-	}
-}
-
 void displaySieteSegmentos(uint8_t digito){
 	switch (digito){
 		case 0 :{
@@ -719,18 +758,156 @@ void displaySieteSegmentos(uint8_t digito){
 	}
 }
 
-void printHelp(void){
+void actualizar_RGB(uint8_t estado_RGB){
+	//Esta función aplica el color actual del LED RGB
+	//Se hace una verificación de los bits del estado_RGB para encender o apagar los LEDs correspondientes
+	if (estado_RGB & RGB_RED_MASK){
+		//Si el bit del led rojo está activo, encendemos el LED ROJO
+		HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_SET); //Enciende el LED ROJO
+	}else{
+		//De lo contrario, apagamos el LED ROJO
+		HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_RESET); //Apaga el LED ROJO
+	}if (estado_RGB & RGB_GREEN_MASK){
+		HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_SET); //Enciende el LED VERDE
+	}else{
+		HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_RESET); //Apaga el LED VERDE
+	}if (estado_RGB & RGB_BLUE_MASK){
+		HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_SET); //Enciende el LED AZUL
+	}else{
+		HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_RESET); //Apaga el LED AZUL
+	}
+
+}
+
+void printhelp(void){
 	//Esta función imprime el menú de opciones en el terminal
-	HAL_UART_Transmit(&huart2, (uint8_t*)"Opciones:\n", strlen("Opciones:\n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"1. Encender LED RGB:                          RGB_ON \n", strlen("1. Encender LED RGB:                          RGB_ON \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"2. Apagar LED RGB:                            RGB_OFF \n", strlen("2. Apagar LED RGB:                            RGB_OFF \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"3. Configurar periodo del Blinky:             Config_Blinky_Period \n", strlen("3. Configurar periodo del Blinky:             Config_Blinky_Period \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"4. Configurar tiempo de muestreo de la señal: Config_Sampling_Time \n", strlen("4. Configurar tiempo de muestreo de la señal: Config_Sampling_Time \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"5. Configurar tamaño de la FFT:               Config_FFT_Size \n", strlen("5. Configurar tamaño de la FFT:               Config_FFT_Size \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"6. Imprimir señal ADC (raw):                  Print_ADC \n", strlen("6. Imprimir señal ADC (raw):                  Print_ADC \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"7. Imprimir espectro de la FFT:               Print_FFT \n", strlen("7. Imprimir espectro de la FFT:               Print_FFT \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"8. Imprimir configuración del equipo:         Print_Config \n", strlen("8. Imprimir configuración del equipo:         Print_Config \n"), HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, (uint8_t*)"9. Imprimir valores importantes FFT:          Print_FFT_Features \n", strlen("9. Imprimir valores importantes FFT:          Print_FFT_Features \n"), HAL_MAX_DELAY);
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)help_msg,strlen(help_msg));
+	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
+}
+
+void rgb_on(void){
+	//Encendemos completamente el LED RGB
+	Current_Color = 0b111; //Se cambia el estado a 0b111 para indicar que se enciende el LED RGB por completo
+	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
+	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+}
+
+void rgb_off(void){
+	Current_Color = 0b0; //Se cambia el estado a 0b000 para indicar que se apague el LED RGB por completo
+	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
+	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+}
+
+void rgb_toogle_red(void){
+	Current_Color ^= RGB_RED_MASK; //Toogle LED Rojo
+	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
+	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+}
+
+void rgb_toogle_green(void){
+	Current_Color ^= RGB_GREEN_MASK; //Toogle LED Verde
+	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
+	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+}
+
+void rgb_toogle_blue(void){
+	Current_Color ^= RGB_BLUE_MASK; //Toogle LED Azul
+	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
+	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+}
+
+void config_blinky(const char *argumento){
+	//Esta función configura el periodo del blinky
+	HAL_TIM_Base_Stop_IT(&htim2); 						//Detiene el timer para poder configurarlo
+	uint32_t nuevo_periodo = atoi(argumento);			//Convierte el argumento a un entero
+	if(nuevo_periodo >= 1 && nuevo_periodo <= 15999){ 	//Verifica que el periodo esté en el rango permitido
+		htim2.Init.Period = nuevo_periodo - 1; 			//Actualiza el periodo del timer
+		HAL_TIM_Base_Init(&htim2); 						//Se carga la configuración del timer con el nuevo periodo
+		HAL_TIM_Base_Start_IT(&htim2); 					//Inicia el timer con interrupciones
+		const char *msg = "Periodo del blinky configurado correctamente.\n";
+		HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+	}else{
+		const char *error_msg = "Periodo inválido. Debe estar entre 1 y 15999 ms.\n";
+		HAL_UART_Transmit(&huart2, (uint8_t *)error_msg, strlen(error_msg), HAL_MAX_DELAY);
+	}
+	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
+}
+
+
+void cfg_sample_rate(const char *argumento){
+	/*
+	 * Esta función configura el tiempo de muestreo de la señal
+	 */
+}
+
+void cfg_size_fft(const char *argumento){
+	/*
+	 * Esta función configura el tamaño de la FFT
+	 */
+}
+
+void print_fft(void){
+	/*
+	 * Esta función imprime el espectro de la FFT
+	 */
+
+}
+
+void print_adc(void){
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&ADC_Buffer, sizeof(ADC_Buffer));
+	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
+}
+
+void print_config(void){
+	/*
+	 * Esta función imprime la configuración del equipo
+	 */
+
+}
+
+void print_fft_features(void){
+	/*
+	 * Esta función imprime los valores importantes de la FFT
+	 */
+
+}
+
+void despachar_comando(char *line){
+	/*
+	 * Esta función despacha el comando recibido por el USART
+	 * Se van a separar los comandos y argumentos
+	 * de la línea recibida por el USART
+	 */
+
+	//Empezamos por eliminar los caracteres de nueva línea y retorno de carro
+	for (int i = 0; i < data_Length; i++) {
+	    if (line[i] == '\r' || line[i] == '\n') {
+	    	line[i] = '\0';  // ¡termina el string aquí!
+	        break;
+	    }
+	}
+
+	char *argumento = strchr(line, ' '); //Se separa el comando del resto de la línea
+	 if (argumento) {
+	        *argumento = '\0';  // separamos con null terminator
+	        argumento++;        // ahora argumento apunta al primer argumento
+	    } else {
+	        argumento = "";     // sin argumentos
+	    }
+
+
+	for (uint8_t i = 0; i< NUM_COMANDOS; i++){
+		//Se recorre el arreglo de comandos de la estrucutra que definimos en el main.h
+		if(strcmp(line, comandos[i].command_name) == 0){
+			//Si el comando coincide con alguno de los comandos definidos
+			comandos[i].handler(argumento); //Se ejecuta la función asociada al comando
+			return; //Se sale de la función, con un early return
+		}
+	}
+
+	const char *error_msg = "Comando no reconocido. Escriba 'help' para ver las opciones disponibles.\n";
+	HAL_UART_Transmit(&huart2, (uint8_t *)error_msg, strlen(error_msg), HAL_MAX_DELAY);
+	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
 }
 
 void FSM_update(State_t State){
@@ -743,15 +920,8 @@ void FSM_update(State_t State){
 			break;
 		}case STATE_RGB_FEEDBACK :{
 			//Este condicional es para poder repetir el ciclo dentro del ENUM indefinidamente
-			if (Current_Color == ROJO_VERDE_AZUL ){	//Si se hace una interrupción y el estado es el final
-				Current_Color = APAGADO;			//Se vuelve al estado apagado
-				cambioEstadoLEDRGB(Current_Color);	//Se muestra el estado apagado
-				Current_State = STATE_REFRESH;			//Se vuelve al estado IDLE
-			}else{
-				Current_Color++;					//De otra forma, se cambia al siguiente estado
-				cambioEstadoLEDRGB(Current_Color);	//Se muestra el color del estado
-				Current_State = STATE_REFRESH;			//Se vuelve al estado IDLE
-			}
+			actualizar_RGB(Current_Color); //Se actualiza el color del LED RGB
+			Current_State = STATE_REFRESH;//Se cambia al estado IDLE para que se muestre los números del contador
 			break;
 		}case STATE_TAXIMETER_FEEDBACK :{
 			//Primero se identifica el sentido de giro del encoder,
@@ -785,85 +955,7 @@ void FSM_update(State_t State){
 			}
 			break;
 		}case STATE_TERMINAL_FEEDBACK :{
-			//Este estado se encarga de recibir los comandos del terminal y ejecutar las acciones correspondiente
-			//Primero se limpian los caracteres de nueva línea y retorno de carro del string recibido
-			for (int i = 0; i < data_Length; i++) {
-			    if (rx_String[i] == '\r' || rx_String[i] == '\n') {
-			        rx_String[i] = '\0';
-			        break;
-			    }
-			}
-
-			//Luego se evalúan los comandos recibidos y se atienden adecuadamente
-			if (strcmp(rx_String, "help") == 0) { // Si el comando es "help"
-				printHelp(); // Imprime las opciones disponibles
-
-			} else if (strcmp(rx_String, "RGB_ON") == 0) {
-				Current_Color = ROJO_VERDE_AZUL; // Cambia al estado RGB_ON
-				cambioEstadoLEDRGB(Current_Color); // Cambia el estado del LED RGB
-
-			} else if (strcmp(rx_String, "RGB_OFF") == 0) {
-				Current_Color = APAGADO; // Cambia al estado RGB_OFF
-				cambioEstadoLEDRGB(Current_Color); // Cambia el estado del LED RGB
-
-			} else if (strcmp(rx_String, "Config_Blinky_Period") == 0) {
-				/*
-				 * Se envía un mensaje por el terminal, para darle feedback al usuario
-				 * Se usa una variable last_rx_String para saber en qué comando se está
-				 * Con el fin de evitar que se detenga el 7 segmentos y aún así poder
-				 * Escribir el nuevo periodo del Blinky, los mismo para los otros comandos
-				 */
-
-				HAL_UART_Transmit(&huart2, (uint8_t*)"Ingrese el nuevo periodo del Blinky: ", strlen("Ingrese el nuevo periodo del Blinky: "), HAL_MAX_DELAY);
-
-			}else if (strcmp(rx_String, "Config_Sampling_Time") == 0) {
-				HAL_UART_Transmit(&huart2, (uint8_t*)"Ingrese el nuevo tiempo de muestreo: ", strlen("Ingrese el nuevo tiempo de muestreo: "), HAL_MAX_DELAY);
-				// Aquí se podría implementar la lógica para recibir un nuevo tiempo de muestreo
-
-			} else if (strcmp(rx_String, "Config_FFT_Size") == 0) {
-				HAL_UART_Transmit(&huart2, (uint8_t*)"Ingrese el nuevo tamaño de la FFT: ", strlen("Ingrese el nuevo tamaño de la FFT: "), HAL_MAX_DELAY);
-				// Aquí se podría implementar la lógica para recibir un nuevo tamaño de FFT
-
-			} else if (strcmp(rx_String, "Print_ADC") == 0) {
-				HAL_UART_Transmit(&huart2, (uint8_t*)"Imprimiendo señal ADC...\n", strlen("Imprimiendo señal ADC...\n"), HAL_MAX_DELAY);
-				// Aquí se podría implementar la lógica para imprimir la señal ADC
-
-			} else if (strcmp(rx_String, "Print_FFT") == 0) {
-				HAL_UART_Transmit(&huart2, (uint8_t*)"Imprimiendo espectro de la FFT...\n", strlen("Imprimiendo espectro de la FFT...\n"), HAL_MAX_DELAY);
-				// Aquí se podría implementar la lógica para imprimir el espectro
-
-			}else if(strcmp(last_rx_String, "Config_Blinky_Period") == 0) {
-				Current_State = STATE_BLINKY_CONFIG; 	// Cambia al estado de configuración del Blinky
-				break;
-
-			}else if(strcmp(last_rx_String, "Config_Sampling_Time") == 0) {
-				Current_State = STATE_SAMPLING_TIME_CONFIG; // Cambia al estado de configuración del tiempo de muestreo
-				break;
-			}
-
-			strcpy(last_rx_String, rx_String); 		 // Copia adecuadamente el último comando recibido
-			Current_State = STATE_REFRESH; // Se vuelve al estado de REFRESH
-			break;
-
-		}case STATE_BLINKY_CONFIG :{
-			// Inside case STATE_BLINKY_CONFIG:
-			char *endptr;			//Puntero para verificar la conversión de string a entero
-			long period = strtol(rx_String, &endptr, 10);	// Función para convertir el string a entero, parámetros de entrada:  el string a convertir, un puntero para verificar la conversión, y la base (10 para decimal)
-
-			// Check if the input is a valid integer and within timer limits
-			if (*endptr == '\0' && period >= 1 && period <= 15999) {
-				HAL_TIM_Base_Stop_IT(&htim2);
-				htim2.Init.Period = (uint32_t)period;
-				HAL_TIM_Base_Init(&htim2);
-				HAL_TIM_Base_Start_IT(&htim2);
-				Current_State = STATE_REFRESH;
-			} else {
-				HAL_UART_Transmit(&huart2, (uint8_t*)"Periodo inválido. Debe ser un número entre 1 y 15999.\n", strlen("Periodo inválido. Debe ser un número entre 1 y 15999.\n"), HAL_MAX_DELAY);
-				Current_State = STATE_REFRESH; // Volver al estado de configuración del Blinky
-			}
-			break;
-		}case STATE_SAMPLING_TIME_CONFIG :{
-
+			despachar_comando(rx_String); //Se despacha el comando recibido por el terminal
 			break;
 		}
 	}
@@ -879,7 +971,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == Switch_Encoder_Pin){ // Botón del encoder
-		Current_State = STATE_RGB_FEEDBACK;	//Al identificar un flanco de subida en el switch se cambia al estado RGB
+		// Se cambia el color del LED RGB al siguiente en la secuencia, si llega al final, vuelve a apagado
+		secuencia_Color = (secuencia_Color + 1) % 8; // Se incrementa el color en la secuencia, y se vuelve a 0 al llegar al final
+		Current_Color = secuencia_RGB[secuencia_Color]; // Se asigna el siguiente color de la secuencia al LED RGB
+		Current_State = STATE_RGB_FEEDBACK;				//Se cambia al estado RGB
 	}else if(GPIO_Pin == Clk_Encoder_Pin){
 		Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
 	}else if(GPIO_Pin == BotonTasaRefrescoDecremento_Pin){
