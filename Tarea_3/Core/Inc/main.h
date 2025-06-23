@@ -64,49 +64,82 @@ typedef enum {
 #define RGB_GREEN_MASK (1 << 1)		//Mascara para modificar el LED Verde del RGB
 #define RGB_BLUE_MASK  (1 << 2)		//Mascara para modificar el LED Azul del RGB
 
+//Identifica para las frecuencias de muestreo del ADC
+typedef enum {
+	LOW,
+	MEDIUM,
+	HIGH,
+	ULTRA,
+} ADC_Sampling_Freq_t;
 
-typedef void (*function_t)(const char *args); // Definición de un puntero a función que recibe un string como argumento
-//Definimos una estructura que contiene el nombre del comando y la función asociada
-
-typedef struct {
-	const char *command_name; 		// Nombre del comando
-	const char *help; 				// Descripción del comando
-	function_t handler;				// Puntero a la función asociada al comando
-} Entrada_Comando_t;
+// Se definen los valores de periodo del timer para las diferentes frecuencias de muestreo del ADC
+static const uint16_t ADC_Sampling_Freq[] = {
+		363,   // LOW 	 = 44.1 kHz
+		333,   // MEDIUM = 48 kHz
+		166,   // HIGH	 = 96 kHz
+		125	,  // ULTRA  = 128 kHz
+};
 
 //Declaramos los prototipos de las funciones que se usarán en el programa
 static void printhelp(void);
-static void rgb_on(void);
-static void rgb_off(void);
-static void rgb_toogle_red(void);
-static void rgb_toogle_blue(void);
-static void rgb_toogle_green(void);
+static void rgb_modify(const char *argumento);
 static void config_blinky(const char *argumento);
-static void cfg_sample_rate(const char *argumento);
+static void cfg_adc_sampling_freq(const char *argumento);
 static void cfg_size_fft(const char *argumento);
 static void print_adc(void);
 static void print_fft(void);
 static void print_config(void);
 static void print_fft_features(void);
+static void start_adc(void);
+static void stop_adc(void);
+static void unknown(void);
+
+
+//Estructura que contiene los ID de los comandos que vamos a utilizar
+typedef enum {
+	CMD_ID_printhelp,
+	CMD_ID_rgb_modify,
+	CMD_ID_config_blinky,
+	CMD_ID_cfg_adc_sampling_freq,
+	CMD_ID_cfg_size_fft,
+	CMD_ID_print_adc,
+	CMD_ID_print_fft,
+	CMD_ID_print_config,
+	CMD_ID_print_fft_features,
+	CMD_ID_start_adc,
+	CMD_ID_stop_adc,
+	CMD_ID_UNKNOWN,
+}ID_Comando;
+
+typedef struct {
+	const char *command_str; 					// Nombre del comando
+	ID_Comando id_comando;
+} Comando_t;
 
 //también se crea una tabla de comandos que contiene los comandos disponibles
-
-static const Entrada_Comando_t comandos[] = {
-		{"help"						,"Muestra esta ayuda"					, printhelp},
-		{"RGB_ON"					,"Enciende el LED RGB"					, rgb_on},
-		{"RGB_OFF"					,"Apaga el LED RGB"						, rgb_off},
-		{"RGB_RED"					,"Toggle Led Rojo del RGB"				, rgb_toogle_red},
-		{"RGB_BLUE"					,"Toggle Led Azul del RGB"				, rgb_toogle_blue},
-		{"RGB_GREEN"				,"Toggle Led Verde del RGB"				, rgb_toogle_green},
-		{"Config_Blinky_Period"		,"Configura periodo blinky [1‑15999]"	, config_blinky},
-		{"Config_Sampling_Time"		,"Configura tiempo muestreo"			, cfg_sample_rate},
-		{"Config_FFT_Size"			,"Configura tamaño FFT"					, cfg_size_fft    },
-		{"Print_ADC"				,"Envía muestras ADC"					, print_adc  },
-		{"Print_FFT"				,"Envía espectro FFT"					, print_fft  },
-		{"Print_Config"				,"Imprime la configuración del equipo"	, print_config},
-		{"Print_FFT_Features"		,"Imprime valores importantes de la FFT", print_fft_features},
+static const Comando_t comandos[] = {
+		{"help"							, CMD_ID_printhelp},
+		{"RGB"							, CMD_ID_rgb_modify},
+		{"Config_Blinky_Period"			, CMD_ID_config_blinky},
+		{"Config_ADC_Sampling_Freq"		, CMD_ID_cfg_adc_sampling_freq},
+		{"Config_FFT_Size"				, CMD_ID_cfg_size_fft    },
+		{"Print_ADC"					, CMD_ID_print_adc  },
+		{"Print_FFT"					, CMD_ID_print_fft  },
+		{"Print_Config"					, CMD_ID_print_config},
+		{"Print_FFT_Features"			, CMD_ID_print_fft_features},
+		{"Start_ADC"					, CMD_ID_start_adc},
+		{"Stop_ADC"						, CMD_ID_stop_adc},
 };
-#define NUM_COMANDOS (sizeof(comandos) / sizeof(Entrada_Comando_t)) //Cantidad de comandos disponibles
+
+#define NUM_COMANDOS (sizeof(comandos) / sizeof(Comando_t)) //Cantidad de comandos disponibles
+
+//Ahora vamos a implementar la arquitectura ping-pong para los receive del UART
+typedef enum { BUFFER_A, BUFFER_B } BufferActivo;
+
+typedef struct {
+    uint8_t*  buffer;
+    uint16_t  size;
+} Paquete_Datos;
 
 /* USER CODE END ET */
 
@@ -186,6 +219,7 @@ void Error_Handler(void);
 /* USER CODE BEGIN Private defines */
 #define RX_BUFFER_MAX_LENGTH 64
 #define ADC_BUFFER_MAX_LENGTH 2048
+#define ADC_MAX_VALUE 4095
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

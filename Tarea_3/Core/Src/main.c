@@ -25,6 +25,11 @@
 #include "string.h"
 #include "stdio.h"
 #include <stdlib.h>
+#define ARM_MATH_CM4	//Definimos esto porque estamos usando el núcleo ARM-Cortex M4
+#include "arm_math.h"
+#include "stm32f4xx_hal.h"
+#include "arm_const_structs.h"
+#include "arm_common_tables.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -86,30 +91,36 @@ uint8_t unidades_contador_Taximetro = 0;
 
 //Variables auxiliares para la comunciación USART
 uint16_t rx_buffer_length = 64;
-uint8_t rx_Buffer[RX_BUFFER_MAX_LENGTH]; // Buffer de recepción
+uint8_t rx_Buffer_A[RX_BUFFER_MAX_LENGTH]; // Buffer de recepción A
+uint8_t rx_Buffer_B[RX_BUFFER_MAX_LENGTH]; // Buffer de recepción B
 uint16_t data_Length = 0; // Longitud de los datos recibidos
 char rx_String[RX_BUFFER_MAX_LENGTH]; // Cadena de recepción
-char last_rx_String[RX_BUFFER_MAX_LENGTH]; // Cadena de recepción anterior
 
-uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
-uint16_t ADC_Buffer_Length = 2048; // Longitud del array del ADC
-uint16_t ADC_Value = 0; // Valor del ADC actual
+volatile Paquete_Datos paquete_listo = {.buffer = NULL, .size = 0};
+volatile BufferActivo buffer_activo_DMA = BUFFER_A;
+
+volatile uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
+ADC_Sampling_Freq_t ARR_timer_4 = LOW;
+volatile float32_t ADC_Float_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC hechos float
+volatile float32_t FFT_Buffer		[ADC_BUFFER_MAX_LENGTH]; //Buffer para el output de la FFT
+volatile float32_t FFT_Magnitudes 	[ADC_BUFFER_MAX_LENGTH/2];	//Buffer para las magnitudes de la FFT
+arm_rfft_fast_instance_f32 rfft_instance; //Se crea una instancia que es requerida por la función RFFT
+uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;	//Tamaño de la FFT que se va a realizar, 2048 por defecto
 
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
     "Opciones:\r\n"
-    "1.  Encender LED RGB:                           RGB_ON\r\n"
-    "2.  Apagar LED RGB:                             RGB_OFF\r\n"
-    "3.  Toggle LED RGB RED:                         RGB_RED\r\n"
-    "4.  Toggle LED RGB GREEN:                       RGB_GREEN\r\n"
-    "5.  Toggle LED RGB BLUE:                        RGB_BLUE\r\n"
-    "6.  Configurar periodo del Blinky:              Config_Blinky_Period\r\n"
-    "7.  Configurar tiempo de muestreo:              Config_Sampling_Time\r\n"
-    "8.  Configurar tamaño de la FFT:                Config_FFT_Size\r\n"
-    "9.  Imprimir señal ADC (raw):                   Print_ADC\r\n"
-    "10. Imprimir espectro FFT:                      Print_FFT\r\n"
-    "11. Imprimir configuración del equipo:          Print_Config\r\n"
-    "12. Imprimir valores clave de la FFT:           Print_FFT_Features\r\n";
+    "1.  Toogle LED RGB (RED, BLUE, GREEN):          RGB <color>\r\n"
+    "2.  Configurar periodo del Blinky:              Config_Blinky_Period <Period (ms)>\r\n"
+    "3.  Configurar tiempo de muestreo:              Config_ADC_Sampling_Freq <Velocidad>\r\n"
+	"Velocidad: LOW = 44.1 KHz , MEDIUM = 48 KHz, HIGH = 96 KHz, ULTRA = 128 KHz\r\n"
+	"4.  Iniciar ADC:                                Start_ADC\r\n"
+	"5.  Detener ADC:                                Stop_ADC\r\n"
+	"6.  Imprimir señal ADC (raw):                   Print_ADC\r\n"
+    "7.  Configurar tamaño de la FFT:                Config_FFT_Size\r\n"
+    "8.  Imprimir espectro FFT:                      Print_FFT\r\n"
+    "9.  Imprimir configuración del equipo:          Print_Config\r\n"
+    "10. Imprimir valores clave de la FFT:           Print_FFT_Features\r\n";
 
 
 /* USER CODE END PV */
@@ -169,17 +180,18 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start_IT(&htim2); // Inicia el Timer 2 para interrupciones
-  HAL_TIM_Base_Start_IT(&htim3); // Inicia el Timer 3 para interrupciones
+  HAL_TIM_Base_Start_IT(&htim2); 	// Inicia el Timer 2 para interrupciones
+  HAL_TIM_Base_Start_IT(&htim3); 	// Inicia el Timer 3 para interrupciones
+  HAL_TIM_Base_Start(&htim4); 		// Inicia el Timer 4 para la conversión del ADC
 
   HAL_GPIO_WritePin(DigitoD0_GPIO_Port, DigitoD0_Pin, GPIO_PIN_SET); // Apagamos todos los digitos para evitar el fantasma
   HAL_GPIO_WritePin(DigitoD1_GPIO_Port, DigitoD1_Pin, GPIO_PIN_SET); // Buuuu
   HAL_GPIO_WritePin(DigitoD2_GPIO_Port, DigitoD2_Pin, GPIO_PIN_SET); // Buuuu
   HAL_GPIO_WritePin(DigitoD3_GPIO_Port, DigitoD3_Pin, GPIO_PIN_SET); // Buuuu
 
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer, rx_buffer_length); // Configura la recepción DMA
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); // Inicia el ADC en modo DMA
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_A, rx_buffer_length); // Configura la recepción DMA con IDLE
 
+  arm_status status = arm_rfft_fast_init_f32(&rfft_instance, fft_Length);	//Iniciamos la instancia al incio para no llamarla cada printFFT, Lo haremos con 2048 por defecto
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -259,7 +271,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T4_CC4;
@@ -397,9 +409,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 16;
+  htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 1;
+  htim4.Init.Period = 363-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -421,8 +433,8 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
+  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+  sConfigOC.Pulse = 1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
@@ -785,77 +797,88 @@ void printhelp(void){
 	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
 }
 
-void rgb_on(void){
-	//Encendemos completamente el LED RGB
-	Current_Color = 0b111; //Se cambia el estado a 0b111 para indicar que se enciende el LED RGB por completo
-	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
-	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
-}
-
-void rgb_off(void){
-	Current_Color = 0b0; //Se cambia el estado a 0b000 para indicar que se apague el LED RGB por completo
-	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
-	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
-}
-
-void rgb_toogle_red(void){
-	Current_Color ^= RGB_RED_MASK; //Toogle LED Rojo
-	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
-	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
-}
-
-void rgb_toogle_green(void){
-	Current_Color ^= RGB_GREEN_MASK; //Toogle LED Verde
-	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
-	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
-}
-
-void rgb_toogle_blue(void){
-	Current_Color ^= RGB_BLUE_MASK; //Toogle LED Azul
+void rgb_modify(const char *argumento){
+	if (strcmp(argumento, "RED") == 0){
+		//Si el argumento es "RED", se hace toogle al LED ROJO
+		Current_Color ^= RGB_RED_MASK;
+	}if (strcmp(argumento, "GREEN") == 0){
+		//Si el argumento es "GREEN", se hace toogle LED VERDE
+		Current_Color ^= RGB_GREEN_MASK;
+	}if (strcmp(argumento, "BLUE") == 0){
+		//Si el argumento es "BLUE", se hace toogle LED AZUL
+		Current_Color ^= RGB_BLUE_MASK;
+	}
 	secuencia_Color = Current_Color; //Se guarda el color actual en la secuencia de colores
 	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
 }
 
 void config_blinky(const char *argumento){
 	//Esta función configura el periodo del blinky
-	HAL_TIM_Base_Stop_IT(&htim2); 						//Detiene el timer para poder configurarlo
 	uint32_t nuevo_periodo = atoi(argumento);			//Convierte el argumento a un entero
-	if(nuevo_periodo >= 1 && nuevo_periodo <= 15999){ 	//Verifica que el periodo esté en el rango permitido
+	if(nuevo_periodo > 0 && nuevo_periodo <= 65536){ 	//Verifica que el periodo esté en el rango permitido
+		HAL_TIM_Base_Stop_IT(&htim2); 						//Detiene el timer para poder configurarlo
 		htim2.Init.Period = nuevo_periodo - 1; 			//Actualiza el periodo del timer
 		HAL_TIM_Base_Init(&htim2); 						//Se carga la configuración del timer con el nuevo periodo
 		HAL_TIM_Base_Start_IT(&htim2); 					//Inicia el timer con interrupciones
 		const char *msg = "Periodo del blinky configurado correctamente.\n";
-		HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)msg, strlen(msg));
 	}else{
-		const char *error_msg = "Periodo inválido. Debe estar entre 1 y 15999 ms.\n";
-		HAL_UART_Transmit(&huart2, (uint8_t *)error_msg, strlen(error_msg), HAL_MAX_DELAY);
+		const char *error_msg = "Periodo inválido. Debe estar entre 1 y 65536 ms.\n";
+		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)error_msg, strlen(error_msg));
 	}
 	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
 }
 
-
-void cfg_sample_rate(const char *argumento){
-	/*
-	 * Esta función configura el tiempo de muestreo de la señal
-	 */
+ADC_Sampling_Freq_t get_adc_sampling_freq_enum(const char *str) {
+	// Se usará esta función para convertir el string a un enum para obtener la frecuencia de muestreo del ADC
+    if (strcmp(str, "LOW") == 0) return LOW;
+    else if (strcmp(str, "MEDIUM") == 0) return MEDIUM;
+    else if (strcmp(str, "HIGH") == 0) return HIGH;
+    else if (strcmp(str, "ULTRA") == 0) return ULTRA;
+    else return 0; // Valor por defecto si no coincide con ninguno
 }
 
-void cfg_size_fft(const char *argumento){
-	/*
-	 * Esta función configura el tamaño de la FFT
-	 */
-}
-
-void print_fft(void){
-	/*
-	 * Esta función imprime el espectro de la FFT
-	 */
-
+void cfg_adc_sampling_freq(const char *argumento){
+	ARR_timer_4 = get_adc_sampling_freq_enum(argumento); // Convierte el argumento a un enum adecuado
+	if(ARR_timer_4 == 0){
+		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)"Frecuencia de muestreo inválida. Debe ser LOW, MEDIUM, HIGH o ULTRA.\n", strlen("Frecuencia de muestreo inválida. Debe ser LOW, MEDIUM, HIGH o ULTRA.\n"));
+		Current_State = STATE_REFRESH; // Se vuelve al estado de REFRESCO
+		return; // Sale de la función si el argumento es inválido
+	}
+	HAL_TIM_Base_Stop(&htim4); 				// Detiene el timer para poder configurarlo
+	HAL_TIM_OC_Stop(&htim4, TIM_CHANNEL_4); 	// Detiene el canal Output Compare
+	htim4.Init.Period = ADC_Sampling_Freq[ARR_timer_4] - 1; // Actualiza el periodo del timer
+	HAL_TIM_Base_Init(&htim4); 					// Se carga la configuración del timer con el nuevo periodo
+	HAL_TIM_Base_Start(&htim4); 				// Inicia el timer
+	HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
+	Current_State = STATE_REFRESH; 				// Se vuelve al estado de REFRESCO
 }
 
 void print_adc(void){
 	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&ADC_Buffer, sizeof(ADC_Buffer));
 	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
+}
+
+void start_adc(void){
+    HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); // Inicia el ADC en modo DMA
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); //Otra vez pa que funcione, la mala para el ADC
+    Current_State = STATE_REFRESH; 				//Se vuelve al estado de REFRESCO
+}
+
+void stop_adc(void){
+	HAL_TIM_OC_Stop(&htim4, TIM_CHANNEL_4); 	// Detiene el canal Output Compare
+	HAL_ADC_Stop_DMA(&hadc1); 					// Detiene el ADC en modo DMA
+	Current_State = STATE_REFRESH; 				//Se vuelve al estado de REFRESCO
+}
+
+void convertir_uint16_to_float32(uint16_t* pOrigen, float32_t* pDestino, uint32_t buffer_length){
+	const float32_t conversion_factor = 1.0f / (float32_t)ADC_MAX_VALUE;
+
+    for (uint32_t i = 0; i < buffer_length; i++) {
+        // Normalizamos a los valores [0.0, 1.0] y convertimos a float cada uno de los valores
+    	pDestino[i] = ((float32_t)pOrigen[i]) * conversion_factor;
+    }
 }
 
 void print_config(void){
@@ -865,11 +888,96 @@ void print_config(void){
 
 }
 
+
+void perform_fft(void) {
+
+	convertir_uint16_to_float32(ADC_Buffer, ADC_Float_Buffer, ADC_BUFFER_MAX_LENGTH);
+    // --- Paso 1: Realizar la FFT ---
+    // Se asume que el buffer del ADC está listo
+    arm_rfft_fast_f32(
+        &rfft_instance,       	// Puntero a la instancia que se inicializó
+		ADC_Float_Buffer,     	// Puntero a los datos de valor real del ADC
+		FFT_Buffer,    			// Puntero al buffer donde se guardan los datos de la FFT
+        0                     	// '0' para FFT, '1' para FFT Inversa (IFFT)
+    );
+
+    // --- Paso 2: Calcular la magnitud ---
+    // The RFFT output is in a packed complex format. This function "unpacks" it
+    // and calculates the magnitude of each complex frequency bin.
+    // Magnitude = sqrt(real^2 + imag^2)
+    arm_cmplx_mag_f32(
+    	FFT_Buffer,    			// Puntero con la información de la FFT
+		FFT_Magnitudes,       	// PUntero destino a donde se guardan las magnitudes de la FFT
+        fft_Length / 2          	// Solo se computan las primeras N/2 magnitudes, los datos relevantes
+    );
+
+    // --- Done! ---
+    // The 'fft_magnitudes' array now holds the spectrum of your signal.
+    // fft_magnitudes[0] = Magnitude of the DC component (0 Hz)
+    // fft_magnitudes[1] = Magnitude of the first frequency bin
+    // ...
+    // fft_magnitudes[511] = Magnitude of the last useful frequency bin
+}
+
 void print_fft_features(void){
 	/*
 	 * Esta función imprime los valores importantes de la FFT
 	 */
 
+}
+
+uint8_t uint16_es_potencia_de_2(uint16_t numero){
+	//Si es potencia de 2, entonces solo debe haber un bit encendido en el número
+	if((numero && (numero-1)) == 0){
+		//Se trata de una potencia de 2
+		return 0;
+	}
+	return 1;
+}
+
+void cfg_size_fft(const char *argumento){
+	/*
+	 * Esta función configura el tamaño de la FFT
+	 */
+	uint16_t aux_verificacion = 0;
+	uint16_t fft_new_Length = atoi(argumento);
+	aux_verificacion = uint16_es_potencia_de_2(fft_new_Length);
+	if(aux_verificacion || (fft_new_Length < 16) || (fft_new_Length > ADC_BUFFER_MAX_LENGTH)){
+		//No pasa la verificación, no se modifica nada
+		const char *errorMsg = "Valor no adecuado para la FFT, deben ser potencias de 2 desde 16 hasta 2048";
+		HAL_UART_Transmit_DMA(&huart2, (uint8_t *) errorMsg, strlen(errorMsg));
+		return;
+	}
+	//En caso contrario, procedemos a modificar el valor de la FFT
+	fft_Length = fft_new_Length;	//Asignamos el nuevor valor a la FFT
+	arm_status status = arm_rfft_fast_init_f32(&rfft_instance, fft_Length);
+	const char *doneMsg = "Tamaño de FFT actualizado correctamente";
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *) doneMsg, strlen(doneMsg));
+}
+
+void print_fft(void){
+	/*
+	 * Esta función imprime el espectro de la FFT
+	 */
+	//Primero transformamos los datos a float del buffer ADC
+
+	perform_fft();
+
+}
+
+void unknown(void){
+	const char *error_msg = "Comando no reconocido. Escriba 'help' para ver las opciones disponibles.\n";
+	HAL_UART_Transmit(&huart2, (uint8_t *)error_msg, strlen(error_msg), HAL_MAX_DELAY);
+	Current_State = STATE_REFRESH;
+}
+
+ID_Comando encontrar_id_comando(const char* str_comando){
+    for (int i = 0; i < NUM_COMANDOS; i++) {
+        if (strcmp(str_comando, comandos[i].command_str) == 0) {
+            return comandos[i].id_comando;
+        }
+    }
+    return CMD_ID_UNKNOWN;
 }
 
 void despachar_comando(char *line){
@@ -879,15 +987,15 @@ void despachar_comando(char *line){
 	 * de la línea recibida por el USART
 	 */
 
-	//Empezamos por eliminar los caracteres de nueva línea y retorno de carro
+	//Empezamos por eliminar los caracteres de nueva línea y retorno de carro \r
 	for (int i = 0; i < data_Length; i++) {
 	    if (line[i] == '\r' || line[i] == '\n') {
-	    	line[i] = '\0';  // ¡termina el string aquí!
+	    	line[i] = '\0';
 	        break;
 	    }
 	}
 
-	char *argumento = strchr(line, ' '); //Se separa el comando del resto de la línea
+	char *argumento = strchr(line, ' '); //Se separa el parámetro del resto de la línea
 	 if (argumento) {
 	        *argumento = '\0';  // separamos con null terminator
 	        argumento++;        // ahora argumento apunta al primer argumento
@@ -895,18 +1003,22 @@ void despachar_comando(char *line){
 	        argumento = "";     // sin argumentos
 	    }
 
+	 ID_Comando id = encontrar_id_comando(line);
+	 switch (id){
+	 	 case CMD_ID_printhelp: 			printhelp(); 						break;
+	 	 case CMD_ID_rgb_modify:			rgb_modify(argumento); 				break;
+	 	 case CMD_ID_config_blinky:			config_blinky(argumento);			break;
+	 	 case CMD_ID_cfg_adc_sampling_freq: cfg_adc_sampling_freq(argumento);	break;
+	 	 case CMD_ID_cfg_size_fft:			cfg_size_fft(argumento);			break;
+	 	 case CMD_ID_print_adc:				print_adc();						break;
+	 	 case CMD_ID_print_fft:				print_fft();						break;
+	 	 case CMD_ID_print_config:			print_config();						break;
+	 	 case CMD_ID_print_fft_features:	print_fft_features();				break;
+	 	 case CMD_ID_start_adc:				start_adc();						break;
+	 	 case CMD_ID_stop_adc:				stop_adc();							break;
+	 	 case CMD_ID_UNKNOWN:				unknown();							break;
+	 }
 
-	for (uint8_t i = 0; i< NUM_COMANDOS; i++){
-		//Se recorre el arreglo de comandos de la estrucutra que definimos en el main.h
-		if(strcmp(line, comandos[i].command_name) == 0){
-			//Si el comando coincide con alguno de los comandos definidos
-			comandos[i].handler(argumento); //Se ejecuta la función asociada al comando
-			return; //Se sale de la función, con un early return
-		}
-	}
-
-	const char *error_msg = "Comando no reconocido. Escriba 'help' para ver las opciones disponibles.\n";
-	HAL_UART_Transmit(&huart2, (uint8_t *)error_msg, strlen(error_msg), HAL_MAX_DELAY);
 	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
 }
 
@@ -988,26 +1100,32 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 }
 
 //Callback del USART Idle para no tener que saber el tamaño del mensaje
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
-{
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 	if (huart->Instance == USART2) {
-		//1. Se guarda el largo del mensaje recibido
 		data_Length = Size; // Se guarda el tamaño del mensaje recibido
-
+		if (buffer_activo_DMA == BUFFER_A){
+			// Señal de que el Buffer A está listo
+			paquete_listo.buffer  = rx_Buffer_A;
+			paquete_listo.size = Size;
+			// Inmediatamente cambiamos el DMA al buffer B
+			buffer_activo_DMA = BUFFER_B;
+			memcpy(rx_String, rx_Buffer_A, Size); // Copia los datos recibidos al buffer de string (Donde se va a copiar el string, de donde se copia, cuántos bytes en este caso, el size recibido)
+			HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_B, rx_buffer_length); // Configura la recepción DMA con IDLE
+		}else {
+			// Señal de que el Buffer B está listo
+			paquete_listo.buffer = rx_Buffer_B;
+			paquete_listo.size = Size;
+			// Inmediatamente cambiamos el DMA al buffer
+			buffer_activo_DMA = BUFFER_A;
+			memcpy(rx_String, rx_Buffer_B, Size); // Copia los datos recibidos al buffer de string (Donde se va a copiar el string, de donde se copia, cuántos bytes en este caso, el size recibido)
+			HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_A, rx_buffer_length); // Configura la recepción DMA con IDLE
+		}
 		//2. Copiamos los datos del rx_DmaBuffer al buffer de recepción
-		memcpy(rx_String, rx_Buffer, Size); // Copia los datos recibidos al buffer de string (Donde se va a copiar el string, de donde se copia, cuántos bytes en este caso, el size recibido)
 		rx_String[Size] = '\0'; 			// Aseguramos que el string esté terminado en nulo para que sí sea un string
 		Current_State = STATE_TERMINAL_FEEDBACK;
-
-		//La interrupción se desahiblita tras la llamada del callback, por lo que se vuelve a habilitar
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, rx_Buffer, rx_buffer_length); // Configura la recepción DMA
-	}
+		}
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
-	ADC_Value =  ADC_Buffer[ADC_Buffer_Length-1]; // Se obtiene el valor del ADC al finalizar la conversión
-	HAL_ADC_Start_DMA(hadc, (uint32_t*)ADC_Buffer, ADC_Buffer_Length); // Se reinicia la conversión del ADC
-}
 /* USER CODE END 4 */
 
 /**
