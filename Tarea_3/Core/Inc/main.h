@@ -81,18 +81,18 @@ static const uint16_t ADC_Sampling_Freq[] = {
 };
 
 //Declaramos los prototipos de las funciones que se usarán en el programa
-static void printhelp(void);
-static void rgb_modify(const char *argumento);
-static void config_blinky(const char *argumento);
-static void cfg_adc_sampling_freq(const char *argumento);
-static void cfg_size_fft(const char *argumento);
-static void print_adc(void);
-static void print_fft(void);
-static void print_config(void);
-static void print_fft_features(void);
-static void start_adc(void);
-static void stop_adc(void);
-static void unknown(void);
+void printhelp(void);
+void rgb_modify(const char *argumento);
+void config_blinky(const char *argumento);
+void cfg_adc_sampling_freq(const char *argumento);
+void cfg_size_fft(const char *argumento);
+void print_adc(void);
+void print_fft(void);
+void print_config(void);
+void print_fft_features(void);
+void start_adc(void);
+void stop_adc(void);
+void unknown(void);
 
 
 //Estructura que contiene los ID de los comandos que vamos a utilizar

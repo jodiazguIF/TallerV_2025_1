@@ -93,19 +93,20 @@ uint8_t unidades_contador_Taximetro = 0;
 uint16_t rx_buffer_length = 64;
 uint8_t rx_Buffer_A[RX_BUFFER_MAX_LENGTH]; // Buffer de recepción A
 uint8_t rx_Buffer_B[RX_BUFFER_MAX_LENGTH]; // Buffer de recepción B
-uint16_t data_Length = 0; // Longitud de los datos recibidos
-char rx_String[RX_BUFFER_MAX_LENGTH]; // Cadena de recepción
 
 volatile Paquete_Datos paquete_listo = {.buffer = NULL, .size = 0};
 volatile BufferActivo buffer_activo_DMA = BUFFER_A;
+uint8_t*  rx_buffer;
+uint16_t  rx_size;
 
-volatile uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
+ uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
 ADC_Sampling_Freq_t ARR_timer_4 = LOW;
-volatile float32_t ADC_Float_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC hechos float
-volatile float32_t FFT_Buffer		[ADC_BUFFER_MAX_LENGTH]; //Buffer para el output de la FFT
-volatile float32_t FFT_Magnitudes 	[ADC_BUFFER_MAX_LENGTH/2];	//Buffer para las magnitudes de la FFT
-arm_rfft_fast_instance_f32 rfft_instance; //Se crea una instancia que es requerida por la función RFFT
-uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;	//Tamaño de la FFT que se va a realizar, 2048 por defecto
+float32_t ADC_Float_Buffer [ADC_BUFFER_MAX_LENGTH]; 	// Array para almacenar los valores del ADC hechos float
+float32_t FFT_Buffer		[ADC_BUFFER_MAX_LENGTH]; 	//Buffer para el output de la FFT
+float32_t FFT_Magnitudes 	[ADC_BUFFER_MAX_LENGTH/2];	//Buffer para las magnitudes de la FFT
+arm_rfft_fast_instance_f32 rfft_instance; 						//Se crea una instancia que es requerida por la función RFFT
+uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;					//Tamaño de la FFT que se va a realizar, 2048 por defecto
+uint8_t esta_activo_ADC = 0;									//Variable auxiliar para saber si el ADC está prendio' o no
 
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
@@ -137,6 +138,7 @@ static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 void printHelp(void);
 void FSM_update(State_t State);
+void start_adc(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -191,7 +193,10 @@ int main(void)
 
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_A, rx_buffer_length); // Configura la recepción DMA con IDLE
 
-  arm_status status = arm_rfft_fast_init_f32(&rfft_instance, fft_Length);	//Iniciamos la instancia al incio para no llamarla cada printFFT, Lo haremos con 2048 por defecto
+  start_adc();	//ADC encendido por defecto
+
+
+  arm_rfft_fast_init_f32(&rfft_instance, fft_Length);	//Iniciamos la instancia al incio para no llamarla cada printFFT, Lo haremos con 2048 por defecto
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -200,6 +205,21 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if (paquete_listo.size > 0){
+		  // --- DATA IS READY FOR PROCESSING ---
+		  // The DMA is now safely filling the *other* buffer.
+		  // We can take as long as we need to process the data in
+		  // data_ready_packet.buffer without risk of corruption.
+
+		  // First, get a local copy of the pointer and size
+		  rx_buffer = paquete_listo.buffer;
+		  rx_size = paquete_listo.size;
+
+		  // --- IMPORTANT: Clear the volatile struct to "consume" the data ---
+		  // This signals we are done and can accept the next packet.
+		  paquete_listo.buffer = NULL;
+		  paquete_listo.size = 0;
+	  }
 	  FSM_update(Current_State); // Llama a la función de actualización del FSM
 
   }
@@ -363,9 +383,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 16000;
+  htim3.Init.Prescaler = 16000-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 4;
+  htim3.Init.Period = 5-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -773,22 +793,9 @@ void displaySieteSegmentos(uint8_t digito){
 void actualizar_RGB(uint8_t estado_RGB){
 	//Esta función aplica el color actual del LED RGB
 	//Se hace una verificación de los bits del estado_RGB para encender o apagar los LEDs correspondientes
-	if (estado_RGB & RGB_RED_MASK){
-		//Si el bit del led rojo está activo, encendemos el LED ROJO
-		HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_SET); //Enciende el LED ROJO
-	}else{
-		//De lo contrario, apagamos el LED ROJO
-		HAL_GPIO_WritePin(GPIOB, RGB_ROJO_Pin, GPIO_PIN_RESET); //Apaga el LED ROJO
-	}if (estado_RGB & RGB_GREEN_MASK){
-		HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_SET); //Enciende el LED VERDE
-	}else{
-		HAL_GPIO_WritePin(GPIOA, RGB_VERDE_Pin, GPIO_PIN_RESET); //Apaga el LED VERDE
-	}if (estado_RGB & RGB_BLUE_MASK){
-		HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_SET); //Enciende el LED AZUL
-	}else{
-		HAL_GPIO_WritePin(GPIOA, RGB_AZUL_Pin, GPIO_PIN_RESET); //Apaga el LED AZUL
-	}
-
+	HAL_GPIO_WritePin(RGB_ROJO_GPIO_Port	, RGB_ROJO_Pin	, (estado_RGB & RGB_RED_MASK) 	? GPIO_PIN_SET:GPIO_PIN_RESET); //Enciende o apaga el LED ROJO con el operador ternario, |Cine|
+	HAL_GPIO_WritePin(RGB_VERDE_GPIO_Port	, RGB_VERDE_Pin	, (estado_RGB & RGB_GREEN_MASK) ? GPIO_PIN_SET:GPIO_PIN_RESET); //Enciende o apaga el LED VERDE con el operador ternario, |Cine|
+	HAL_GPIO_WritePin(RGB_AZUL_GPIO_Port	, RGB_AZUL_Pin	, (estado_RGB & RGB_BLUE_MASK) 	? GPIO_PIN_SET:GPIO_PIN_RESET); //Enciende o apaga el LED AZUL con el operador ternario, |Cine|
 }
 
 void printhelp(void){
@@ -798,6 +805,7 @@ void printhelp(void){
 }
 
 void rgb_modify(const char *argumento){
+
 	if (strcmp(argumento, "RED") == 0){
 		//Si el argumento es "RED", se hace toogle al LED ROJO
 		Current_Color ^= RGB_RED_MASK;
@@ -855,20 +863,35 @@ void cfg_adc_sampling_freq(const char *argumento){
 }
 
 void print_adc(void){
-	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&ADC_Buffer, sizeof(ADC_Buffer));
-	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
+	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO Marranada
+	char aux_buffer [8192];	//Buffer temporal
+	uint16_t offset = 0;	//Variable para saber en qué parte del buffer poner los datos
+	for(uint16_t i = 0; i < ADC_BUFFER_MAX_LENGTH ; i++){
+		float ADC_Voltaje =(ADC_Buffer[i]*3.3f/4095);
+		int aux = sprintf(&aux_buffer[offset], "%.3f\r\n", ADC_Voltaje);
+		offset+=aux;	//Aumentamos lo que escribimos
+		//Marranada para que funcione mejor
+		FSM_update(Current_State);
+	}
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&aux_buffer, offset);
 }
 
 void start_adc(void){
-    HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); // Inicia el ADC en modo DMA
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); //Otra vez pa que funcione, la mala para el ADC
+	if (esta_activo_ADC == 0){
+		HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); // Inicia el ADC en modo DMA
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); //Otra vez pa que funcione, la mala para el ADC
+	}
+	esta_activo_ADC = 1;						//El ADC está activo y empieza a funcionar
     Current_State = STATE_REFRESH; 				//Se vuelve al estado de REFRESCO
 }
 
 void stop_adc(void){
-	HAL_TIM_OC_Stop(&htim4, TIM_CHANNEL_4); 	// Detiene el canal Output Compare
-	HAL_ADC_Stop_DMA(&hadc1); 					// Detiene el ADC en modo DMA
+	if(esta_activo_ADC == 1){
+		HAL_TIM_OC_Stop(&htim4, TIM_CHANNEL_4); 	// Detiene el canal Output Compare
+		HAL_ADC_Stop_DMA(&hadc1); 					// Detiene el ADC en modo DMA
+	}
+	esta_activo_ADC = 0;
 	Current_State = STATE_REFRESH; 				//Se vuelve al estado de REFRESCO
 }
 
@@ -885,12 +908,47 @@ void print_config(void){
 	/*
 	 * Esta función imprime la configuración del equipo
 	 */
+	float tasa_muestreo = 44.1;
+	if(ARR_timer_4 == MEDIUM){
+		tasa_muestreo = 48;
+	}else if(ARR_timer_4 == HIGH){
+		tasa_muestreo = 96;
+	}else if(ARR_timer_4 == ULTRA){
+		tasa_muestreo = 128;
+	}
 
+	char config[512];
+	sprintf(config,
+	    "Tasa de Muestreo:      %.1f   kHz\n"
+	    "Tamano FFT:            %u   index\n"
+	    "Tamano Buffer ADC:     %u   index\n"
+	    "TIM2 Prescaler:        %u   \n"
+	    "TIM2 Period:           %u   \n"
+	    "TIM3 Prescaler:        %u   \n"
+	    "TIM3 Period:           %u   \n"
+	    "TIM4 Prescaler:        %u   \n"
+	    "TIM4 Period:           %u   \n",
+	    tasa_muestreo,              // uint16_t
+	    fft_Length,                 // uint16_t
+	    ADC_BUFFER_MAX_LENGTH,      // uint16_t
+	    (uint16_t )TIM2->PSC,   // uint32_t
+	    (uint16_t)TIM2->ARR,   // uint32_t
+	    (uint16_t)TIM3->PSC,   // uint32_t
+	    (uint16_t)TIM3->ARR,   // uint32_t
+	    (uint16_t)TIM4->PSC,   // uint32_t
+	    (uint16_t)TIM4->ARR    // uint32_t
+	);
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)config,strlen(config));
+	Current_State = STATE_REFRESH;
 }
 
-
 void perform_fft(void) {
-
+	if (esta_activo_ADC == 0){	//El buffer de ADC no está activo, necesitamos que recolecte datos para hacer la FFT
+		const char *errorMsg = "El ADC no está activo, inicia con Start_ADC y vuelve a intentarlo\n";
+		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)errorMsg, strlen(errorMsg));
+		Current_State = STATE_REFRESH;		//Volvemos al Refresh
+		return;								//Se sale de la función
+	}
 	convertir_uint16_to_float32(ADC_Buffer, ADC_Float_Buffer, ADC_BUFFER_MAX_LENGTH);
     // --- Paso 1: Realizar la FFT ---
     // Se asume que el buffer del ADC está listo
@@ -923,12 +981,84 @@ void print_fft_features(void){
 	/*
 	 * Esta función imprime los valores importantes de la FFT
 	 */
+	perform_fft();	//Realizamos una transformada de Fourier
+	float32_t magnitud_predominante;
+	uint32_t  magnitud_predominante_index;
+	HAL_StatusTypeDef status;
+	float tasa_muestreo = 44100;
+	if(ARR_timer_4 == MEDIUM){
+		tasa_muestreo = 48000;
+	}else if(ARR_timer_4 == HIGH){
+		tasa_muestreo = 96000;
+	}else if(ARR_timer_4 == ULTRA){
+		tasa_muestreo = 128000;
+	}
+	// --- Paso 1: Hallar el componente con el valor más alto ---
+	// Se busca desde el índice 1 porque el 0 es la componente DC).
+	arm_max_f32(
+			&FFT_Magnitudes[1],     		// Iniciamos desde el elemento 1
+			(fft_Length / 2) - 1,     		// Número de los elementos que se van a buscar, se asume que son la mitad
+			&magnitud_predominante,         // Esta variable contiene la magnitud más grande encontrada
+			&magnitud_predominante_index    // Y esta el índice respectivo
+	);
 
+	// Ajuste del índice, pues este debe ser absoluto
+	magnitud_predominante_index = magnitud_predominante_index + 1;
+
+	// Paso 2: Convertir el índice a un valor de frecuencia real
+	float32_t frequency_resolution = tasa_muestreo / (2*fft_Length);
+	float32_t dominant_frequency = magnitud_predominante_index * frequency_resolution;
+
+	// --- Step 3: Formatear aduacadamente la salida ---
+	// Formatear la frecuencia en String
+	char tx_buffer[80];
+	sprintf(tx_buffer, "Frecuencia Dominante:     %.2f Hz\r\n", dominant_frequency);
+
+	// --- Paso 4: Transmitir la frecuencia ya formateada  ---
+	status = HAL_UART_Transmit(
+			&huart2,                     // Pointer to the UART handle
+			(uint8_t*)tx_buffer,         // Pointer to the data buffer (must be cast to uint8_t*)
+			strlen(tx_buffer),           // Number of bytes to send
+			100
+	);
+
+	// Format the magnitude string
+	sprintf(tx_buffer, "Magnitud Freq Dominante:  %.2f\r\n", magnitud_predominante);
+
+	// Transmit the second string
+	status = HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer),100);
+
+	// --- Paso 5: Hallemos el componente DC de la señal, para esto, se debe aplicar el factor de
+	// Escala adecuado, pues F(x) = 1/N SUM(n=0, n=N-1, x[n]), por lo tanto, este factor
+	// Es simplemente el número de muestras 1/N
+	float componente_DC = 3.3f * FFT_Magnitudes[0] / fft_Length;
+	// Lo formateamos:
+	sprintf(tx_buffer, "Componente DC:            %.2f V\r\n", componente_DC);
+	//Transmitimos
+	status = HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer),100);
+
+	float valor_RMS = 0;
+	// Hallamos el valor RMS de la señal
+	convertir_uint16_to_float32(ADC_Buffer, ADC_Float_Buffer, ADC_BUFFER_MAX_LENGTH);
+	arm_rms_f32(ADC_Float_Buffer, ADC_BUFFER_MAX_LENGTH, &valor_RMS);	//El tercer argumento debe ser un puntero que apunta a una variable tipo float, se obtiene el valor RMS de la señal
+	valor_RMS = valor_RMS * 3.3;	//Originilamente el ADC_Float_Buffer está normalizado entre 0 y 1, lo multiplicamos por 3.3V para hallar la potencia adecuadamente
+	float potencia_promedio = valor_RMS * valor_RMS;	//La potencia de la señal es su valor RMS al cuadrado
+	// Lo formateamos:
+	sprintf(tx_buffer, "Potencia Promedio:        %.2f W\r\n", potencia_promedio);
+	//Transmitimos
+	status = HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer),100);
+
+	if (status != HAL_OK) {
+		// Transmission error
+	}
+
+
+	Current_State = STATE_REFRESH;
 }
 
 uint8_t uint16_es_potencia_de_2(uint16_t numero){
 	//Si es potencia de 2, entonces solo debe haber un bit encendido en el número
-	if((numero && (numero-1)) == 0){
+	if((numero & (numero-1)) == 0){
 		//Se trata de una potencia de 2
 		return 0;
 	}
@@ -946,13 +1076,15 @@ void cfg_size_fft(const char *argumento){
 		//No pasa la verificación, no se modifica nada
 		const char *errorMsg = "Valor no adecuado para la FFT, deben ser potencias de 2 desde 16 hasta 2048";
 		HAL_UART_Transmit_DMA(&huart2, (uint8_t *) errorMsg, strlen(errorMsg));
+		Current_State = STATE_REFRESH;
 		return;
 	}
 	//En caso contrario, procedemos a modificar el valor de la FFT
 	fft_Length = fft_new_Length;	//Asignamos el nuevor valor a la FFT
-	arm_status status = arm_rfft_fast_init_f32(&rfft_instance, fft_Length);
-	const char *doneMsg = "Tamaño de FFT actualizado correctamente";
+	arm_rfft_fast_init_f32(&rfft_instance, fft_Length);
+	const char *doneMsg = "Tamaño de FFT actualizado correctamente\n";
 	HAL_UART_Transmit_DMA(&huart2, (uint8_t *) doneMsg, strlen(doneMsg));
+	Current_State = STATE_REFRESH;
 }
 
 void print_fft(void){
@@ -960,14 +1092,25 @@ void print_fft(void){
 	 * Esta función imprime el espectro de la FFT
 	 */
 	//Primero transformamos los datos a float del buffer ADC
-
 	perform_fft();
 
+	char aux_buffer [8192];	//Buffer temporal
+	uint16_t offset = 0;	//Variable para saber en qué parte del buffer poner los datos
+
+	for(uint16_t i = 0; i < (fft_Length / 2) ; i++){
+		int aux = sprintf(&aux_buffer[offset], "%.3f\r\n", FFT_Magnitudes[i]);
+		offset+=aux;	//Aumentamos lo que escribimos
+		//Marranada para que funcione mejor
+		Current_State = STATE_REFRESH;
+		FSM_update(Current_State);
+	}
+	FSM_update(Current_State);	//Otra marranada
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)aux_buffer, offset );	//A enviar la data de la FFT
 }
 
 void unknown(void){
 	const char *error_msg = "Comando no reconocido. Escriba 'help' para ver las opciones disponibles.\n";
-	HAL_UART_Transmit(&huart2, (uint8_t *)error_msg, strlen(error_msg), HAL_MAX_DELAY);
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)error_msg, strlen(error_msg));
 	Current_State = STATE_REFRESH;
 }
 
@@ -988,7 +1131,7 @@ void despachar_comando(char *line){
 	 */
 
 	//Empezamos por eliminar los caracteres de nueva línea y retorno de carro \r
-	for (int i = 0; i < data_Length; i++) {
+	for (int i = 0; i < rx_size; i++) {
 	    if (line[i] == '\r' || line[i] == '\n') {
 	    	line[i] = '\0';
 	        break;
@@ -1018,8 +1161,6 @@ void despachar_comando(char *line){
 	 	 case CMD_ID_stop_adc:				stop_adc();							break;
 	 	 case CMD_ID_UNKNOWN:				unknown();							break;
 	 }
-
-	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO
 }
 
 void FSM_update(State_t State){
@@ -1067,7 +1208,7 @@ void FSM_update(State_t State){
 			}
 			break;
 		}case STATE_TERMINAL_FEEDBACK :{
-			despachar_comando(rx_String); //Se despacha el comando recibido por el terminal
+			despachar_comando((char *) rx_buffer); //Se despacha el comando recibido por el terminal
 			break;
 		}
 	}
@@ -1102,14 +1243,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 //Callback del USART Idle para no tener que saber el tamaño del mensaje
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 	if (huart->Instance == USART2) {
-		data_Length = Size; // Se guarda el tamaño del mensaje recibido
 		if (buffer_activo_DMA == BUFFER_A){
 			// Señal de que el Buffer A está listo
 			paquete_listo.buffer  = rx_Buffer_A;
 			paquete_listo.size = Size;
 			// Inmediatamente cambiamos el DMA al buffer B
 			buffer_activo_DMA = BUFFER_B;
-			memcpy(rx_String, rx_Buffer_A, Size); // Copia los datos recibidos al buffer de string (Donde se va a copiar el string, de donde se copia, cuántos bytes en este caso, el size recibido)
 			HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_B, rx_buffer_length); // Configura la recepción DMA con IDLE
 		}else {
 			// Señal de que el Buffer B está listo
@@ -1117,11 +1256,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 			paquete_listo.size = Size;
 			// Inmediatamente cambiamos el DMA al buffer
 			buffer_activo_DMA = BUFFER_A;
-			memcpy(rx_String, rx_Buffer_B, Size); // Copia los datos recibidos al buffer de string (Donde se va a copiar el string, de donde se copia, cuántos bytes en este caso, el size recibido)
 			HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_A, rx_buffer_length); // Configura la recepción DMA con IDLE
 		}
-		//2. Copiamos los datos del rx_DmaBuffer al buffer de recepción
-		rx_String[Size] = '\0'; 			// Aseguramos que el string esté terminado en nulo para que sí sea un string
 		Current_State = STATE_TERMINAL_FEEDBACK;
 		}
 }
