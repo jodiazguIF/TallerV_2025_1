@@ -859,6 +859,7 @@ void cfg_adc_sampling_freq(const char *argumento){
 	HAL_TIM_Base_Init(&htim4); 					// Se carga la configuración del timer con el nuevo periodo
 	HAL_TIM_Base_Start(&htim4); 				// Inicia el timer
 	HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)"Frecuencia de muestreo configurada correctamente",strlen("Frecuencia de muestreo configurada correctamente"));
 	Current_State = STATE_REFRESH; 				// Se vuelve al estado de REFRESCO
 }
 
@@ -1024,7 +1025,7 @@ void print_fft_features(void){
 
 	// Format the magnitude string
 	sprintf(tx_buffer, "Magnitud Freq Dominante:  %.2f\r\n", magnitud_predominante);
-
+	sprintf(tx_buffer, "Bin Freq Dominante:       %u\r\n", magnitud_predominante_index);
 	// Transmit the second string
 	status = HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer),100);
 
