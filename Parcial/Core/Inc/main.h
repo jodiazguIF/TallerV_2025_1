@@ -47,11 +47,10 @@ typedef enum{
 	STATE_TERMINAL_FEEDBACK,
 } State_t;
 
-
-// Se definen las máscaras que se usarán para modificar el estado del LED RGB
-#define RGB_RED_MASK   (1 << 0) 	//Mascara para modificar el LED Rojo del RGB
-#define RGB_GREEN_MASK (1 << 1)		//Mascara para modificar el LED Verde del RGB
-#define RGB_BLUE_MASK  (1 << 2)		//Mascara para modificar el LED Azul del RGB
+//Variables para llevar el tracking del valor del PWM de cada RGB
+uint8_t PWM_ROJO = 100;
+uint8_t PWM_VERDE = 100;
+uint8_t PWM_AZUL = 100;
 
 //Identifica para las frecuencias de muestreo del ADC
 typedef enum {
@@ -82,6 +81,8 @@ void print_config(void);
 void print_fft_features(void);
 void start_adc(void);
 void stop_adc(void);
+void performance_7seg(void);
+void performance_message(void);
 void unknown(void);
 
 
@@ -98,6 +99,8 @@ typedef enum {
 	CMD_ID_print_fft_features,
 	CMD_ID_start_adc,
 	CMD_ID_stop_adc,
+	CMD_ID_performance_7_segments,
+	CMD_ID_performance_message,
 	CMD_ID_UNKNOWN,
 }ID_Comando;
 
@@ -119,6 +122,8 @@ static const Comando_t comandos[] = {
 		{"Print_FFT_Features"			, CMD_ID_print_fft_features},
 		{"Start_ADC"					, CMD_ID_start_adc},
 		{"Stop_ADC"						, CMD_ID_stop_adc},
+		{"Performance_7Seg"				, CMD_ID_performance_7_segments},
+		{"Performance_Message"			, CMD_ID_performance_message},
 };
 
 #define NUM_COMANDOS (sizeof(comandos) / sizeof(Comando_t)) //Cantidad de comandos disponibles
@@ -166,10 +171,6 @@ void Error_Handler(void);
 #define BotonTasaRefrescoIncremento_Pin GPIO_PIN_4
 #define BotonTasaRefrescoIncremento_GPIO_Port GPIOA
 #define BotonTasaRefrescoIncremento_EXTI_IRQn EXTI4_IRQn
-#define RGB_VERDE_Pin GPIO_PIN_5
-#define RGB_VERDE_GPIO_Port GPIOA
-#define RGB_AZUL_Pin GPIO_PIN_6
-#define RGB_AZUL_GPIO_Port GPIOA
 #define DigitoD3_Pin GPIO_PIN_5
 #define DigitoD3_GPIO_Port GPIOC
 #define Data_Encoder_Pin GPIO_PIN_2
@@ -183,6 +184,12 @@ void Error_Handler(void);
 #define DigitoD1_GPIO_Port GPIOC
 #define SieteSegmentosLEDA_Pin GPIO_PIN_9
 #define SieteSegmentosLEDA_GPIO_Port GPIOC
+#define RGB_VERDE_Pin GPIO_PIN_8
+#define RGB_VERDE_GPIO_Port GPIOA
+#define RGB_ROJO_Pin GPIO_PIN_9
+#define RGB_ROJO_GPIO_Port GPIOA
+#define RGB_AZUL_Pin GPIO_PIN_10
+#define RGB_AZUL_GPIO_Port GPIOA
 #define SieteSegmentosLEDF_Pin GPIO_PIN_11
 #define SieteSegmentosLEDF_GPIO_Port GPIOA
 #define SieteSegmentosLEDB_Pin GPIO_PIN_12
@@ -203,8 +210,6 @@ void Error_Handler(void);
 #define SWO_GPIO_Port GPIOB
 #define DigitoD0_Pin GPIO_PIN_7
 #define DigitoD0_GPIO_Port GPIOB
-#define RGB_ROJO_Pin GPIO_PIN_8
-#define RGB_ROJO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 #define RX_BUFFER_MAX_LENGTH 64
