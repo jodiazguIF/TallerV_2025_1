@@ -49,6 +49,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -62,6 +63,10 @@ DMA_HandleTypeDef hdma_usart2_tx;
 /* USER CODE BEGIN PV */
 State_t Current_State = STATE_REFRESH; 	// Se fija el estado por defecto
 
+//Variables para llevar el tracking del valor del PWM de cada RGB
+uint8_t PWM_ROJO = 100;
+uint8_t PWM_VERDE = 100;
+uint8_t PWM_AZUL = 100;
 
 //Variable que lleva el contador completo del taxímetro
 uint16_t contador_Taximetro = 0;
@@ -86,7 +91,7 @@ volatile BufferActivo buffer_activo_DMA = BUFFER_A;
 uint8_t*  rx_buffer;
 uint16_t  rx_size;
 
- uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
+uint16_t ADC_Buffer [ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC, provenientes del DMA
 ADC_Sampling_Freq_t ARR_timer_4 = LOW;
 float32_t ADC_Float_Buffer [ADC_BUFFER_MAX_LENGTH]; 	// Array para almacenar los valores del ADC hechos float
 float32_t FFT_Buffer		[ADC_BUFFER_MAX_LENGTH]; 	//Buffer para el output de la FFT
@@ -96,10 +101,15 @@ uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;					//Tamaño de la FFT que se va a
 uint8_t esta_activo_ADC = 0;									//Variable auxiliar para saber si el ADC está prendio' o no
 uint16_t longitud_ADC = 2048;									//Variable para llevar rastro del tamaño del ADC
 
+//Variables para las conversiones ADC del joystick
+uint16_t JOYSTICK_Buffer [2]; // X, Y
+float JOYSTICK_X = 0;
+float JOYSTICK_Y = 0;
+
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
     "Opciones:\r\n"
-    "1.  Toogle LED RGB (RED, BLUE, GREEN):          RGB <color>\r\n"
+    "1.  PWM [0-99] LED RGB:                         RGB <ColorPWM>, Ej: RGB R08\r\n"
     "2.  Configurar periodo del Blinky:              Config_Blinky_Period <Period (ms)>\r\n"
     "3.  Configurar tiempo de muestreo:              Config_ADC_Sampling_Freq <Velocidad>\r\n"
 	"Velocidad: LOW = 44.1 KHz , MEDIUM = 48 KHz, HIGH = 96 KHz, ULTRA = 128 KHz\r\n"
@@ -303,13 +313,13 @@ static void MX_ADC1_Init(void)
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -319,9 +329,18 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Rank = 2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -527,7 +546,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 363-1;
+  htim4.Init.Period = 48000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -606,6 +625,7 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Stream5_IRQn interrupt configuration */
@@ -614,6 +634,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
 }
 
@@ -953,7 +976,9 @@ void displaySieteSegmentos(uint8_t digito){
 
 void actualizar_RGB(void){
 	//Esta función aplica el PWM actual del LED RGB
-
+	__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1,PWM_VERDE); 	//CHANNEL_1 = VERDE
+	__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2,PWM_ROJO); 	//CHANNEL_2 = ROJO
+	__HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3,PWM_AZUL); 	//CHANNEL_3 = AZUL
 }
 
 void printhelp(void){
@@ -966,14 +991,20 @@ void rgb_modify(const char *argumento){
 
 	if (argumento[0] == 'R'){
 		PWM_ROJO = atoi(&argumento[1]);
+		Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+		return;
 	}if (argumento[0] == 'G'){
 		//Si el argumento es "GREEN", se hace toogle LED VERDE
 		PWM_VERDE = atoi(&argumento[1]);
+		Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+		return;
 	}if (argumento[0] == 'B'){
 		//Si el argumento es "BLUE", se hace toogle LED AZUL
 		PWM_AZUL = atoi(&argumento[1]);
+		Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+		return;
 	}
-	Current_State = STATE_RGB_FEEDBACK; //Se cambia el estado a STATE_RGB_FEEDBACK
+	unknown();
 }
 
 void config_blinky(const char *argumento){
@@ -1034,8 +1065,8 @@ void print_adc(void){
 void start_adc(void){
 	if (esta_activo_ADC == 0){
 		HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); // Inicia el ADC en modo DMA
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_Buffer, ADC_BUFFER_MAX_LENGTH); //Otra vez pa que funcione, la mala para el ADC
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) JOYSTICK_Buffer, 2);
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) JOYSTICK_Buffer, 2);
 	}
 	esta_activo_ADC = 1;						//El ADC está activo y empieza a funcionar
     Current_State = STATE_REFRESH; 				//Se vuelve al estado de REFRESCO
@@ -1332,7 +1363,7 @@ void FSM_update(State_t State){
 		}case STATE_RGB_FEEDBACK :{
 			//Este condicional es para poder repetir el ciclo dentro del ENUM indefinidamente
 			actualizar_RGB(); //Se actualiza el color del LED RGB
-
+			Current_State = STATE_REFRESH;
 			break;
 		}case STATE_TAXIMETER_FEEDBACK :{
 			//Primero se identifica el sentido de giro del encoder,
@@ -1343,13 +1374,12 @@ void FSM_update(State_t State){
 				contador_Taximetro--;
 			}
 			//Luego se evita que el contador pase de 0 a 0xFFFF, pasándolo a 0xFFF, pues queremos simular una variable de 12 bits
-			if(contador_Taximetro > 4096){
-				contador_Taximetro = 4095;
-			}else if(contador_Taximetro > 4095){ //También se debe desbordar de 0xFFF a 0 en lugar de seguir subiendo
-				contador_Taximetro = 0;
-			}
+			JOYSTICK_X = JOYSTICK_X * 100/4095;
+			JOYSTICK_Y = JOYSTICK_Y * 100/4095;
+
+			contador_Taximetro = (JOYSTICK_X*100)+(JOYSTICK_Y);
 			separarContador();	//Se separan los miles, centenas, decenas, unidades del nuevo número en el contador para
-								//Mostrarlos posteriormente
+
 			Current_State = STATE_REFRESH;//Se cambia al estado IDLE para que se muestre los números del contador
 			break;
 		}case STATE_CHANGE_REFRESH :{
@@ -1382,13 +1412,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == Switch_Encoder_Pin){ // Botón del encoder
-		// Se cambia el color del LED RGB al siguiente en la secuencia, si llega al final, vuelve a apagado
-		PWM_ROJO = 0;
-		PWM_VERDE = 0;
-		PWM_AZUL = 0;
+		if((PWM_ROJO == 0) && (PWM_VERDE == 0) && (PWM_AZUL == 0)){
+			PWM_ROJO = 99;
+			PWM_VERDE = 99;
+			PWM_AZUL = 99;
+		}else{
+			PWM_ROJO = 0;
+			PWM_VERDE = 0;
+			PWM_AZUL = 0;
+		}
 		Current_State = STATE_RGB_FEEDBACK;				//Se cambia al estado RGB
 	}else if(GPIO_Pin == Clk_Encoder_Pin){
-		Current_State = STATE_TAXIMETER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
+		Current_State = STATE_RGB_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
 	}else if(GPIO_Pin == BotonTasaRefrescoDecremento_Pin){
 		htim3.Init.Period	+= 10; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
 		Current_State = STATE_CHANGE_REFRESH;
@@ -1419,6 +1454,16 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 		}
 		Current_State = STATE_TERMINAL_FEEDBACK;
 		}
+	Current_State = STATE_TAXIMETER_FEEDBACK;
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+    if (hadc->Instance == ADC1) {
+        JOYSTICK_X = JOYSTICK_Buffer[0];
+        JOYSTICK_Y = JOYSTICK_Buffer[1];
+        Current_State = STATE_TAXIMETER_FEEDBACK;
+        FSM_update(Current_State);
+    }
 }
 
 /* USER CODE END 4 */

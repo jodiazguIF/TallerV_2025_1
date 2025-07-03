@@ -47,10 +47,6 @@ typedef enum{
 	STATE_TERMINAL_FEEDBACK,
 } State_t;
 
-//Variables para llevar el tracking del valor del PWM de cada RGB
-uint8_t PWM_ROJO = 100;
-uint8_t PWM_VERDE = 100;
-uint8_t PWM_AZUL = 100;
 
 //Identifica para las frecuencias de muestreo del ADC
 typedef enum {
@@ -166,13 +162,15 @@ void Error_Handler(void);
 #define Clk_Encoder_Pin GPIO_PIN_1
 #define Clk_Encoder_GPIO_Port GPIOC
 #define Clk_Encoder_EXTI_IRQn EXTI1_IRQn
-#define ADC_SENAL_Pin GPIO_PIN_1
-#define ADC_SENAL_GPIO_Port GPIOA
+#define JOYSTICK_X_Pin GPIO_PIN_0
+#define JOYSTICK_X_GPIO_Port GPIOA
 #define BotonTasaRefrescoIncremento_Pin GPIO_PIN_4
 #define BotonTasaRefrescoIncremento_GPIO_Port GPIOA
 #define BotonTasaRefrescoIncremento_EXTI_IRQn EXTI4_IRQn
 #define DigitoD3_Pin GPIO_PIN_5
 #define DigitoD3_GPIO_Port GPIOC
+#define JOYSTICK_Y_Pin GPIO_PIN_0
+#define JOYSTICK_Y_GPIO_Port GPIOB
 #define Data_Encoder_Pin GPIO_PIN_2
 #define Data_Encoder_GPIO_Port GPIOB
 #define BotonTasaRefrescoDecremento_Pin GPIO_PIN_15

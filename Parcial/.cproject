@@ -48,11 +48,16 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc}/CMSISrepo/STM32Cube_FW_F4_V1.28.0/Drivers/CMSIS/Include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc}/CMSISrepo/STM32Cube_FW_F4_V1.28.0/Drivers/CMSIS/DSP/Include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc}/CMSISrepo/STM32Cube_FW_F4_V1.28.0/Drivers/CMSIS/Device/ST/STM32F4xx/Include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/Parcial/Core/Inc}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${git_work_tree}/${ProjName}/Drivers/STM32F4xx_HAL_Driver/Inc&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${git_work_tree}/${ProjName}/Drivers/CMSIS/Device/ST/STM32F4xx/Include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${git_work_tree}/${ProjName}/Drivers/CMSIS/Include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${git_work_tree}/${ProjName}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Core/Inc}&quot;"/>
+									<listOptionValue builtIn="false" value="../Core/Inc"/>
+									<listOptionValue builtIn="false" value="../Drivers/STM32F4xx_HAL_Driver/Inc"/>
+									<listOptionValue builtIn="false" value="../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy"/>
+									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Device/ST/STM32F4xx/Include"/>
+									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Include"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.386905091" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
 							</tool>
