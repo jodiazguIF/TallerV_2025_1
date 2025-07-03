@@ -107,6 +107,7 @@ float32_t FFT_Magnitudes 	[ADC_BUFFER_MAX_LENGTH/2];	//Buffer para las magnitude
 arm_rfft_fast_instance_f32 rfft_instance; 						//Se crea una instancia que es requerida por la función RFFT
 uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;					//Tamaño de la FFT que se va a realizar, 2048 por defecto
 uint8_t esta_activo_ADC = 0;									//Variable auxiliar para saber si el ADC está prendio' o no
+uint16_t longitud_ADC = 2048;									//Variable para llevar rastro del tamaño del ADC
 
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
@@ -293,7 +294,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ScanConvMode = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISINGFALLING;
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T4_CC4;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
@@ -461,6 +462,7 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
+  __HAL_TIM_ENABLE_OCxPRELOAD(&htim4, TIM_CHANNEL_4);
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
@@ -855,26 +857,24 @@ void cfg_adc_sampling_freq(const char *argumento){
 	}
 	HAL_TIM_Base_Stop(&htim4); 				// Detiene el timer para poder configurarlo
 	HAL_TIM_OC_Stop(&htim4, TIM_CHANNEL_4); 	// Detiene el canal Output Compare
-	htim4.Init.Period = ADC_Sampling_Freq[ARR_timer_4] - 1; // Actualiza el periodo del timer
+	htim4.Init.Period = ADC_Sampling_Freq[ARR_timer_4-1] - 1; // Actualiza el periodo del timer
 	HAL_TIM_Base_Init(&htim4); 					// Se carga la configuración del timer con el nuevo periodo
 	HAL_TIM_Base_Start(&htim4); 				// Inicia el timer
 	HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4); 	// Inicia el canal Output Compare
-	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)"Frecuencia de muestreo configurada correctamente",strlen("Frecuencia de muestreo configurada correctamente"));
+	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)"Frecuencia de muestreo configurada correctamente\n",strlen("Frecuencia de muestreo configurada correctamente\n"));
 	Current_State = STATE_REFRESH; 				// Se vuelve al estado de REFRESCO
 }
 
 void print_adc(void){
 	Current_State = STATE_REFRESH; //Se vuelve al estado de REFRESCO Marranada
-	char aux_buffer [8192];	//Buffer temporal
-	uint16_t offset = 0;	//Variable para saber en qué parte del buffer poner los datos
-	for(uint16_t i = 0; i < ADC_BUFFER_MAX_LENGTH ; i++){
+	char aux_buffer [128];	//Buffer temporal
+	for(uint16_t i = 0; i < longitud_ADC ; i++){
 		float ADC_Voltaje =(ADC_Buffer[i]*3.3f/4095);
-		int aux = sprintf(&aux_buffer[offset], "%.3f\r\n", ADC_Voltaje);
-		offset+=aux;	//Aumentamos lo que escribimos
+		int aux = sprintf(&aux_buffer[0], "%.3f\r\n", ADC_Voltaje);
+		HAL_UART_Transmit(&huart2, (uint8_t *)&aux_buffer, aux,100);
 		//Marranada para que funcione mejor
 		FSM_update(Current_State);
 	}
-	HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&aux_buffer, offset);
 }
 
 void start_adc(void){
@@ -931,7 +931,7 @@ void print_config(void){
 	    "TIM4 Period:           %u   \n",
 	    tasa_muestreo,              // uint16_t
 	    fft_Length,                 // uint16_t
-	    ADC_BUFFER_MAX_LENGTH,      // uint16_t
+	    longitud_ADC,      		// uint16_t
 	    (uint16_t )TIM2->PSC,   // uint32_t
 	    (uint16_t)TIM2->ARR,   // uint32_t
 	    (uint16_t)TIM3->PSC,   // uint32_t
@@ -1007,7 +1007,7 @@ void print_fft_features(void){
 	magnitud_predominante_index = magnitud_predominante_index + 1;
 
 	// Paso 2: Convertir el índice a un valor de frecuencia real
-	float32_t frequency_resolution = tasa_muestreo / (2*fft_Length);
+	float32_t frequency_resolution = tasa_muestreo / (fft_Length);
 	float32_t dominant_frequency = magnitud_predominante_index * frequency_resolution;
 
 	// --- Step 3: Formatear aduacadamente la salida ---
@@ -1025,7 +1025,7 @@ void print_fft_features(void){
 
 	// Format the magnitude string
 	sprintf(tx_buffer, "Magnitud Freq Dominante:  %.2f\r\n", magnitud_predominante);
-	sprintf(tx_buffer, "Bin Freq Dominante:       %u\r\n", magnitud_predominante_index);
+	sprintf(tx_buffer, "Bin Freq Dominante:       %lu\r\n", magnitud_predominante_index);
 	// Transmit the second string
 	status = HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer),100);
 
@@ -1075,13 +1075,14 @@ void cfg_size_fft(const char *argumento){
 	aux_verificacion = uint16_es_potencia_de_2(fft_new_Length);
 	if(aux_verificacion || (fft_new_Length < 16) || (fft_new_Length > ADC_BUFFER_MAX_LENGTH)){
 		//No pasa la verificación, no se modifica nada
-		const char *errorMsg = "Valor no adecuado para la FFT, deben ser potencias de 2 desde 16 hasta 2048";
+		const char *errorMsg = "Valor no adecuado para la FFT, deben ser potencias de 2 desde 16 hasta 2048\n";
 		HAL_UART_Transmit_DMA(&huart2, (uint8_t *) errorMsg, strlen(errorMsg));
 		Current_State = STATE_REFRESH;
 		return;
 	}
 	//En caso contrario, procedemos a modificar el valor de la FFT
 	fft_Length = fft_new_Length;	//Asignamos el nuevor valor a la FFT
+	longitud_ADC = fft_Length;
 	arm_rfft_fast_init_f32(&rfft_instance, fft_Length);
 	const char *doneMsg = "Tamaño de FFT actualizado correctamente\n";
 	HAL_UART_Transmit_DMA(&huart2, (uint8_t *) doneMsg, strlen(doneMsg));

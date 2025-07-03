@@ -66,6 +66,7 @@ typedef enum {
 
 //Identifica para las frecuencias de muestreo del ADC
 typedef enum {
+	NONE,
 	LOW,
 	MEDIUM,
 	HIGH,
@@ -74,10 +75,10 @@ typedef enum {
 
 // Se definen los valores de periodo del timer para las diferentes frecuencias de muestreo del ADC
 static const uint16_t ADC_Sampling_Freq[] = {
-		363,   // LOW 	 = 44.1 kHz
-		333,   // MEDIUM = 48 kHz
-		166,   // HIGH	 = 96 kHz
-		125	,  // ULTRA  = 128 kHz
+		360,   // LOW 	 = 44.1 kHz
+		330,   // MEDIUM = 48 kHz
+		164,   // HIGH	 = 96 kHz
+		123,  // ULTRA  = 128 kHz
 };
 
 //Declaramos los prototipos de las funciones que se usarán en el programa
