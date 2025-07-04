@@ -64,9 +64,9 @@ DMA_HandleTypeDef hdma_usart2_tx;
 State_t Current_State = STATE_REFRESH; 	// Se fija el estado por defecto
 
 //Variables para llevar el tracking del valor del PWM de cada RGB
-uint8_t PWM_ROJO = 100;
-uint8_t PWM_VERDE = 100;
-uint8_t PWM_AZUL = 100;
+uint8_t PWM_ROJO = 99;
+uint8_t PWM_VERDE = 99;
+uint8_t PWM_AZUL = 99;
 
 //Variable que lleva el contador completo del taxímetro
 uint16_t contador_Taximetro = 0;
@@ -316,11 +316,11 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISINGFALLING;
+  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T4_CC4;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 2;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -544,9 +544,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 0;
+  htim4.Init.Prescaler = 16000-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 48000;
+  htim4.Init.Period = 100-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -1362,24 +1362,29 @@ void FSM_update(State_t State){
 			break;
 		}case STATE_RGB_FEEDBACK :{
 			//Este condicional es para poder repetir el ciclo dentro del ENUM indefinidamente
+			if((PWM_ROJO > 99) & (PWM_ROJO < 101)){
+				PWM_ROJO = 99;
+			}else if(PWM_ROJO >100){
+				PWM_ROJO =0;
+			}if((PWM_AZUL > 99) & (PWM_AZUL < 101)){
+				PWM_AZUL = 99;
+			}else if(PWM_AZUL > 100){
+				PWM_AZUL = 0;
+			}if((PWM_VERDE > 99) & (PWM_VERDE < 101)){
+				PWM_VERDE = 99;
+			}else if(PWM_VERDE > 100){
+				PWM_VERDE = 0;
+			}
+
 			actualizar_RGB(); //Se actualiza el color del LED RGB
 			Current_State = STATE_REFRESH;
 			break;
 		}case STATE_TAXIMETER_FEEDBACK :{
-			//Primero se identifica el sentido de giro del encoder,
-			//Sumando o restando en cada caso
-			if (HAL_GPIO_ReadPin(Data_Encoder_GPIO_Port, Data_Encoder_Pin) == GPIO_PIN_RESET){	//Se lee el pin Data del Encoder
-				contador_Taximetro++;
-			}else{
-				contador_Taximetro--;
-			}
-			//Luego se evita que el contador pase de 0 a 0xFFFF, pasándolo a 0xFFF, pues queremos simular una variable de 12 bits
-			JOYSTICK_X = JOYSTICK_X * 100/4095;
-			JOYSTICK_Y = JOYSTICK_Y * 100/4095;
+			uint16_t x = (uint16_t)(JOYSTICK_X * 100.0f / 4095.0f);
+			uint16_t y = (uint16_t)(JOYSTICK_Y * 100.0f / 4095.0f);
 
-			contador_Taximetro = (JOYSTICK_X*100)+(JOYSTICK_Y);
+			contador_Taximetro = (y*100)+(x);
 			separarContador();	//Se separan los miles, centenas, decenas, unidades del nuevo número en el contador para
-
 			Current_State = STATE_REFRESH;//Se cambia al estado IDLE para que se muestre los números del contador
 			break;
 		}case STATE_CHANGE_REFRESH :{
@@ -1398,6 +1403,19 @@ void FSM_update(State_t State){
 		}case STATE_TERMINAL_FEEDBACK :{
 			despachar_comando((char *) rx_buffer); //Se despacha el comando recibido por el terminal
 			break;
+		}case STATE_ENCODER_FEEDBACK :{
+			//Primero se identifica el sentido de giro del encoder,
+			//Sumando o restando en cada caso
+			if (HAL_GPIO_ReadPin(Data_Encoder_GPIO_Port, Data_Encoder_Pin) == GPIO_PIN_RESET){	//Se lee el pin Data del Encoder
+				PWM_ROJO++;
+				PWM_VERDE++;
+				PWM_AZUL++;
+			}else{
+				PWM_ROJO--;
+				PWM_VERDE--;
+				PWM_AZUL--;
+			}
+			Current_State = STATE_RGB_FEEDBACK;
 		}
 	}
 }
@@ -1423,7 +1441,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 		}
 		Current_State = STATE_RGB_FEEDBACK;				//Se cambia al estado RGB
 	}else if(GPIO_Pin == Clk_Encoder_Pin){
-		Current_State = STATE_RGB_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
+		Current_State = STATE_ENCODER_FEEDBACK; //Se identifica un flanco de subida en el clock y se pasa rápidamente al estado que cambia el número del taxímetro
 	}else if(GPIO_Pin == BotonTasaRefrescoDecremento_Pin){
 		htim3.Init.Period	+= 10; 	//Modificamos el valor del periodo del timer, aumentando la velocidad
 		Current_State = STATE_CHANGE_REFRESH;
@@ -1454,7 +1472,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 		}
 		Current_State = STATE_TERMINAL_FEEDBACK;
 		}
-	Current_State = STATE_TAXIMETER_FEEDBACK;
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
@@ -1462,7 +1479,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
         JOYSTICK_X = JOYSTICK_Buffer[0];
         JOYSTICK_Y = JOYSTICK_Buffer[1];
         Current_State = STATE_TAXIMETER_FEEDBACK;
-        FSM_update(Current_State);
     }
 }
 
