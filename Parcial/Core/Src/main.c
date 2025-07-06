@@ -139,7 +139,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
-void printHelp(void);
+void printhelp(void);
 void FSM_update(State_t State);
 void start_adc(void);
 void setNumeroSieteSegmentos(uint8_t numero);
@@ -205,7 +205,8 @@ int main(void)
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rx_Buffer_A, rx_buffer_length); // Configura la recepción DMA con IDLE
 
   start_adc();	//ADC encendido por defecto
-
+  printhelp();	//Imprimimos la ayuda
+  DWT_Init();	//Iniciamos el DWT
 
   arm_rfft_fast_init_f32(&rfft_instance, fft_Length);	//Iniciamos la instancia al incio para no llamarla cada printFFT, Lo haremos con 2048 por defecto
   /* USER CODE END 2 */
@@ -228,21 +229,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if (paquete_listo.size > 0){
-		  // --- DATA IS READY FOR PROCESSING ---
-		  // The DMA is now safely filling the *other* buffer.
-		  // We can take as long as we need to process the data in
-		  // data_ready_packet.buffer without risk of corruption.
-
-		  // First, get a local copy of the pointer and size
-		  rx_buffer = paquete_listo.buffer;
-		  rx_size = paquete_listo.size;
-
-		  // --- IMPORTANT: Clear the volatile struct to "consume" the data ---
-		  // This signals we are done and can accept the next packet.
-		  paquete_listo.buffer = NULL;
-		  paquete_listo.size = 0;
-	  }
 	  FSM_update(Current_State); // Llama a la función de actualización del FSM
 
   }
@@ -937,7 +923,7 @@ void performance_message(void){
     elapsed_cycles = end_cycles - start_cycles;
 
     // --- Report the result via UART ---
-    sprintf(tx_buffer, "Tiempo para pintar digito: %lu ciclos\r\n", elapsed_cycles);
+    sprintf(tx_buffer, "Tiempo para Imprimir Mensaje: %lu ciclos\r\n", elapsed_cycles);
     HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer), 100);
 
     // You can also calculate the time in microseconds
@@ -1380,8 +1366,8 @@ void FSM_update(State_t State){
 			Current_State = STATE_REFRESH;
 			break;
 		}case STATE_TAXIMETER_FEEDBACK :{
-			uint16_t x = (uint16_t)(JOYSTICK_X * 100.0f / 4095.0f);
-			uint16_t y = (uint16_t)(JOYSTICK_Y * 100.0f / 4095.0f);
+			uint16_t x = (uint16_t)(JOYSTICK_X * 99.0f / 4095.0f);
+			uint16_t y = (uint16_t)(JOYSTICK_Y * 99.0f / 4095.0f);
 
 			contador_Taximetro = (y*100)+(x);
 			separarContador();	//Se separan los miles, centenas, decenas, unidades del nuevo número en el contador para
@@ -1401,6 +1387,21 @@ void FSM_update(State_t State){
 			}
 			break;
 		}case STATE_TERMINAL_FEEDBACK :{
+			  if (paquete_listo.size > 0){
+				  // --- DATA IS READY FOR PROCESSING ---
+				  // The DMA is now safely filling the *other* buffer.
+				  // We can take as long as we need to process the data in
+				  // data_ready_packet.buffer without risk of corruption.
+
+				  // First, get a local copy of the pointer and size
+				  rx_buffer = paquete_listo.buffer;
+				  rx_size = paquete_listo.size;
+
+				  // --- IMPORTANT: Clear the volatile struct to "consume" the data ---
+				  // This signals we are done and can accept the next packet.
+				  paquete_listo.buffer = NULL;
+				  paquete_listo.size = 0;
+			  }
 			despachar_comando((char *) rx_buffer); //Se despacha el comando recibido por el terminal
 			break;
 		}case STATE_ENCODER_FEEDBACK :{

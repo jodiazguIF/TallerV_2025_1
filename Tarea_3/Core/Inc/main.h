@@ -47,6 +47,17 @@ typedef enum{
 	STATE_TERMINAL_FEEDBACK,
 } State_t;
 
+//Se definen los estados finitos que puede tener el led RGB a través de una variable de 8 bits sin signo
+typedef enum {
+    RGB_OFF 		= 0b000,
+    RGB_ROJO 		= 0b001,
+    RGB_VERDE 		= 0b010,
+    RGB_AZUL 		= 0b100,
+    RGB_AZUL_VERDE 	= 0b110,
+    RGB_AZUL_ROJO	= 0b101,
+    RGB_ROJO_VERDE 	= 0b011,
+    RGB_ON 			= 0b111
+} RGB_Color_t;
 
 // Se definen las máscaras que se usarán para modificar el estado del LED RGB
 #define RGB_RED_MASK   (1 << 0) 	//Mascara para modificar el LED Rojo del RGB
