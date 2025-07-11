@@ -149,6 +149,10 @@ void Error_Handler(void);
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
+#define Serial_Clock_Pin GPIO_PIN_6
+#define Serial_Clock_GPIO_Port GPIOB
+#define Serial_Data_Pin GPIO_PIN_7
+#define Serial_Data_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 #define RX_BUFFER_MAX_LENGTH 64
@@ -156,7 +160,7 @@ void Error_Handler(void);
 #define ADC_MAX_VALUE 4095
 
 //Definimos los registros del MPU6050
-#define MPU6050_ADDR 0x68  // Dirección del MPU6050
+#define MPU6050_ADDR (0x68 << 1) // Dirección del MPU6050 (7 bits) << 1 para I2C
 #define SMPLRT_DIV_REG 0x19
 #define GYRO_CONFIG_REG 0x1B
 #define ACCEL_CONFIG_REG 0x1C

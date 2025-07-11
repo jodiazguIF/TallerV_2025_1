@@ -2,16 +2,14 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
+  * @brief          : Main Tarea_4 Taller V, 2025-1
+  * @author		 	: Jose Andrés Díaz Gutiérrez
   ******************************************************************************
   * @attention
   *
   * Copyright (c) 2025 STMicroelectronics.
   * All rights reserved.
   *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
@@ -71,6 +69,7 @@ volatile BufferActivo buffer_activo_DMA = BUFFER_A;
 uint8_t*  rx_buffer;
 uint16_t  rx_size;
 
+//Variables y Buffers para la FFT
 uint16_t Buffer_Datos 			[ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del MCU
 float 	Buffer_Datos_Float 		[ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC hechos float
 float32_t FFT_Buffer			[ADC_BUFFER_MAX_LENGTH]; 	//Buffer para el output de la FFT
@@ -80,6 +79,11 @@ uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;					//Tamaño de la FFT que se va a
 uint16_t longitud_Buffer_Datos = 2048;
 char *argumento_comandos;
 
+//Variables para el acelerómetro
+int16_t ACCEL_X, ACCEL_Y, ACCEL_Z; // Variables para almacenar los valores del acelerómetro
+int16_t GYRO_X, GYRO_Y, GYRO_Z; // Variables para almacenar los valores del giroscopio
+int16_t ACCEL_X_RAW, ACCEL_Y_RAW, ACCEL_Z_RAW; // Variables para almacenar los valores del acelerómetro _RAW
+int16_t GYRO_X_RAW, GYRO_Y_RAW, GYRO_Z_RAW; // Variables para almacenar los valores del giroscopio _RAW
 
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
@@ -157,7 +161,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
+  MPU6050_Init(); //Inicializamos el MPU6050
   while (1){
     /* USER CODE END WHILE */
 
@@ -392,12 +396,15 @@ void MPU6050_Init(void){
 	uint8_t check, data; //Variables auxiliares para la comunicación I2C
 	//Primero verificamos que el MPU6050 esté conectado, leyendo el registro WHO_AM_I (0x75), el sensor debería retornar 0x68, su ADDRESS con AD0 = 0
 	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1, 1000);
+
+
 	if(check != 0x68){
 		//El sensor no está conectado correctamente
 		const char *msg = "MPU6050 desconectado. Conéctelo correctamente y escriba: Start_DMU.\n";
 		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)msg, strlen(msg));
 		return; //No se puede continuar
 	}
+
 
 	//Si está conectado, procedemos a configurarlo, escribiendno en el registro PWR_MGMT_1 (0x6B) un 0x00, para que el sensor esté activo
 	/*	Bit 7: Device_Reset 	= 0, No queremos reiniciar el dispositivo
@@ -419,14 +426,53 @@ void MPU6050_Init(void){
 	data = 0x07; //Valor para escribir en SMPLRT_DIV
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &data, 1, 1000);
 	/*
-	 * Procedemos a configurar la escala del giroscopio y acelerómetro a un rango de 250°/s 0x00
+	 * Procedemos a configurar la escala del giroscopio y acelerómetro a un rango de 2000°/s 0x18
 	 * Y un rango en la aceleración de +- 16g: 0x18
 	 * Omitimos los self tests, pues no los vamos a usar
 	 */
-	data = 0x00; //Valor para escribir en el registro GYRO_CONFIG (0x1B)
+	data = 0x18; //Valor para escribir en el registro GYRO_CONFIG (0x1B)
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &data, 1, 1000);
-	data = 0x18; //Valor para escribir en el registro ACCEL_CONFIG (0x1C)
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &data, 1, 1000);
+}
+
+void MPU6050_Read_Accel(void){
+	/*
+	 * La configuración que tenemos es de +- 16g
+	 * Por lo tanto, LSB sensitivity es de 2048 LSB/g
+	 */
+	uint8_t data_Recolectada[6];
+
+	// Leemos los 6 bytes de data empezando desde el registro ACCEL_XOUT_H (0x3B)
+
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, data_Recolectada, 6, 1000);
+
+	ACCEL_X_RAW = (int16_t)(data_Recolectada[0] << 8 | data_Recolectada[1]); // Combinamos los dos bytes de datos para el eje X
+	ACCEL_Y_RAW = (int16_t)(data_Recolectada[2] << 8 | data_Recolectada[3]); // Combinamos los dos bytes de datos para el eje Y
+	ACCEL_Z_RAW = (int16_t)(data_Recolectada[4] << 8 | data_Recolectada[5]); // Combinamos los dos bytes de datos para el eje Z
+
+	ACCEL_X = ACCEL_X_RAW / 2048; // Convertimos a g
+	ACCEL_Y = ACCEL_Y_RAW / 2048; // Convertimos a g
+	ACCEL_Z = ACCEL_Z_RAW / 2048; // Convertimos a g
+}
+
+void MPU6050_Read_Gyro(void){
+	/*
+	 * La configuración que tenemos es de 2000°/s
+	 * Por lo tanto, LSB sensitivity es de 16.4 LSB/s
+	 */
+	uint8_t data_Recolectada[6];
+
+	// Leemos los 6 bytes de data empezando desde el registro GYRO_XOUT_H (0x43)
+
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, GYRO_XOUT_H_REG, 1, data_Recolectada, 6, 1000);
+
+	GYRO_X_RAW = (int16_t)(data_Recolectada[0] << 8 | data_Recolectada[1]); // Combinamos los dos bytes de datos para el eje X
+	GYRO_Y_RAW = (int16_t)(data_Recolectada[2] << 8 | data_Recolectada[3]); // Combinamos los dos bytes de datos para el eje Y
+	GYRO_Z_RAW = (int16_t)(data_Recolectada[4] << 8 | data_Recolectada[5]); // Combinamos los dos bytes de datos para el eje Z
+
+	GYRO_X = GYRO_X_RAW / 16.4; // Convertimos a °/s
+	GYRO_Y = GYRO_Y_RAW / 16.4; // Convertimos a °/s
+	GYRO_Z = GYRO_Z_RAW / 16.4; // Convertimos a °/s
 }
 
 void printhelp(void){
@@ -689,6 +735,8 @@ void FSM_update(State_t State){
 	switch (State){
 		case STATE_IDLE :{
 			//Aquí irá la toma de datos del MCU y el display en la pantalla
+			MPU6050_Read_Accel(); //Leemos el acelerómetro
+			MPU6050_Read_Gyro(); //Leemos el giroscopio
 			break;
 		}
 		case STATE_TERMINAL :{
