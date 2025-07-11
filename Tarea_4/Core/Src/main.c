@@ -30,6 +30,7 @@
 #include "stm32f4xx_hal.h"
 #include "arm_const_structs.h"
 #include "arm_common_tables.h"
+#include "i2c-lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,6 +103,7 @@ static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 void printhelp(void);
 void FSM_update(State_t State);
+void MPU6050_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -353,14 +355,10 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(UserLed_GPIO_Port, UserLed_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SieteSegmentosLEDC_GPIO_Port, SieteSegmentosLEDC_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : UserLed_Pin */
   GPIO_InitStruct.Pin = UserLed_Pin;
@@ -368,13 +366,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(UserLed_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : SieteSegmentosLEDC_Pin */
-  GPIO_InitStruct.Pin = SieteSegmentosLEDC_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SieteSegmentosLEDC_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   // Para EXTI0 (PC0)
@@ -396,6 +387,47 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void MPU6050_Init(void){
+	uint8_t check, data; //Variables auxiliares para la comunicación I2C
+	//Primero verificamos que el MPU6050 esté conectado, leyendo el registro WHO_AM_I (0x75), el sensor debería retornar 0x68, su ADDRESS con AD0 = 0
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1, 1000);
+	if(check != 0x68){
+		//El sensor no está conectado correctamente
+		const char *msg = "MPU6050 desconectado. Conéctelo correctamente y escriba: Start_DMU.\n";
+		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)msg, strlen(msg));
+		return; //No se puede continuar
+	}
+
+	//Si está conectado, procedemos a configurarlo, escribiendno en el registro PWR_MGMT_1 (0x6B) un 0x00, para que el sensor esté activo
+	/*	Bit 7: Device_Reset 	= 0, No queremos reiniciar el dispositivo
+	 *  Bit 6: Sleep 			= 0, No queremos que el dispositivo esté en modo de sueño
+	 *  Bit 5: Cycle 			= 0, No queremos que el dispositivo esté en modo de ciclo
+	 *  Bit 4: Reserved 		= 0, Reservado
+	 *  Bit 3: Temp_Disable 	= 1, No necesitamos que el sensor mida la temperatura
+	 *  Bit 2-0: Clock_Select 	= 000, Seleccionamos el reloj interno del sensor
+	 *  Escribimos entonces  0b00001000 = 0x08
+	 */
+	data = 0x08; //Valor a escribir en el registro PWR_MGMT_1
+	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, PWR_MGMT_1_REG, 1, &data, 1, 1000);
+	/*
+	 * Ahora debemos configurar el sample rate del sensor, fijándonos en el registro SMPLRT_DIV 0x19 y en el Configuration 0x1A
+	 * Por defecto, configuration = 0x00, lo que significa que el sensor tiene un gyroscope output rate de 8kHz
+	 * Luego, en en SMPLRT_Div, escribimos un valor de 0x07, para configurar el sample rate a 1kHz
+	 * Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV)
+	 */
+	data = 0x07; //Valor para escribir en SMPLRT_DIV
+	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &data, 1, 1000);
+	/*
+	 * Procedemos a configurar la escala del giroscopio y acelerómetro a un rango de 250°/s 0x00
+	 * Y un rango en la aceleración de +- 16g: 0x18
+	 * Omitimos los self tests, pues no los vamos a usar
+	 */
+	data = 0x00; //Valor para escribir en el registro GYRO_CONFIG (0x1B)
+	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &data, 1, 1000);
+	data = 0x18; //Valor para escribir en el registro ACCEL_CONFIG (0x1C)
+	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &data, 1, 1000);
+}
 
 void printhelp(void){
 	//Esta función imprime el menú de opciones en el terminal
