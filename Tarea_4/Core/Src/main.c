@@ -50,6 +50,7 @@
 I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_rx;
@@ -70,20 +71,22 @@ uint8_t*  rx_buffer;
 uint16_t  rx_size;
 
 //Variables y Buffers para la FFT
-uint16_t Buffer_Datos 			[ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del MCU
 float 	Buffer_Datos_Float 		[ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC hechos float
+uint16_t index_Datos = 0;
 float32_t FFT_Buffer			[ADC_BUFFER_MAX_LENGTH]; 	//Buffer para el output de la FFT
 float32_t FFT_Magnitudes 		[ADC_BUFFER_MAX_LENGTH/2];	//Buffer para las magnitudes de la FFT
 arm_rfft_fast_instance_f32 rfft_instance; 						//Se crea una instancia que es requerida por la función RFFT
 uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;					//Tamaño de la FFT que se va a realizar, 2048 por defecto
 uint16_t longitud_Buffer_Datos = 2048;
+float frecuencia_dominante = 0;
 char *argumento_comandos;
 
 //Variables para el acelerómetro
-int16_t ACCEL_X, ACCEL_Y, ACCEL_Z; // Variables para almacenar los valores del acelerómetro
-int16_t GYRO_X, GYRO_Y, GYRO_Z; // Variables para almacenar los valores del giroscopio
+float ACCEL_X, ACCEL_Y, ACCEL_Z; // Variables para almacenar los valores del acelerómetro
+float GYRO_X, GYRO_Y, GYRO_Z; // Variables para almacenar los valores del giroscopio
 int16_t ACCEL_X_RAW, ACCEL_Y_RAW, ACCEL_Z_RAW; // Variables para almacenar los valores del acelerómetro _RAW
 int16_t GYRO_X_RAW, GYRO_Y_RAW, GYRO_Z_RAW; // Variables para almacenar los valores del giroscopio _RAW
+uint16_t refresh_lcd = 0;	//Variable auxiliar para refrescar la pantalla del LCD
 
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
@@ -102,8 +105,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void printhelp(void);
 void FSM_update(State_t State);
@@ -146,8 +150,9 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_TIM2_Init();
   MX_I2C1_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim2); 	// Inicia el Timer 2 para interrupciones
 
@@ -155,13 +160,26 @@ int main(void)
 
   printhelp();	//Imprimimos la ayuda
 
-
   arm_rfft_fast_init_f32(&rfft_instance, fft_Length);	//Iniciamos la instancia al incio para no llamarla cada printFFT, Lo haremos con 2048 por defecto
+
+  MPU6050_Init(); //Inicializamos el MPU6050
+
+  lcd_init(); // Se inicializa la pantalla
+  lcd_send_string ("Inicializando"); //Mandamos un mensaje a la pantalla
+
+  HAL_Delay(1000);	//Esperamos 1 segundo
+  lcd_clear();		//Limpiamos lo que haya en la pantalla
+
+  lcd_send_cmd(0x80|0x5A);
+  lcd_send_string("MPU6050");
+
+  HAL_TIM_Base_Start_IT(&htim3); 	// Inicia el Timer 3 para interrupciones
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  MPU6050_Init(); //Inicializamos el MPU6050
+
   while (1){
     /* USER CODE END WHILE */
 
@@ -204,7 +222,7 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
@@ -293,6 +311,51 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 16000-1;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 1000-1;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -358,11 +421,18 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(UserLed_GPIO_Port, UserLed_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, LCD_OK_Pin|I2C_Error_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(I2C_OK_GPIO_Port, I2C_OK_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : UserLed_Pin */
   GPIO_InitStruct.Pin = UserLed_Pin;
@@ -370,6 +440,30 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(UserLed_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LCD_OK_Pin I2C_Error_Pin */
+  GPIO_InitStruct.Pin = LCD_OK_Pin|I2C_Error_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : I2C_OK_Pin */
+  GPIO_InitStruct.Pin = I2C_OK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(I2C_OK_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : MCU_Data_Ready_Pin */
+  GPIO_InitStruct.Pin = MCU_Data_Ready_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(MCU_Data_Ready_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   // Para EXTI0 (PC0)
@@ -391,21 +485,35 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void  I2C_verify(void){
+	uint8_t check;
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, MCU_WHO_AM_I_REG, 1, &check, 1, 1000);
+	if ((HAL_I2C_IsDeviceReady(&hi2c1, LCD_ADDR, 3, 1000) == HAL_OK) && (check == 0x68)) {
+	    //La pantalla y el MPU están respondiendo
+		HAL_GPIO_WritePin(I2C_OK_GPIO_Port, I2C_OK_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(LCD_OK_GPIO_Port, LCD_OK_Pin, GPIO_PIN_SET);
+	} else {
+		HAL_GPIO_WritePin(I2C_OK_GPIO_Port, I2C_OK_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(LCD_OK_GPIO_Port, LCD_OK_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(I2C_Error_GPIO_Port, I2C_Error_Pin, GPIO_PIN_SET);
+
+	}
+}
+
 
 void MPU6050_Init(void){
 	uint8_t check, data; //Variables auxiliares para la comunicación I2C
 	//Primero verificamos que el MPU6050 esté conectado, leyendo el registro WHO_AM_I (0x75), el sensor debería retornar 0x68, su ADDRESS con AD0 = 0
-	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, WHO_AM_I_REG, 1, &check, 1, 1000);
-
+	HAL_I2C_Mem_Read(&hi2c1, MPU6050_ADDR, MCU_WHO_AM_I_REG, 1, &check, 1, 1000);
 
 	if(check != 0x68){
 		//El sensor no está conectado correctamente
 		const char *msg = "MPU6050 desconectado. Conéctelo correctamente y escriba: Start_DMU.\n";
 		HAL_UART_Transmit_DMA(&huart2, (uint8_t *)msg, strlen(msg));
+		HAL_GPIO_WritePin(I2C_Error_GPIO_Port, I2C_Error_Pin, GPIO_PIN_SET);
 		return; //No se puede continuar
 	}
-
-
+	HAL_GPIO_WritePin(I2C_OK_GPIO_Port, I2C_OK_Pin, GPIO_PIN_SET);
 	//Si está conectado, procedemos a configurarlo, escribiendno en el registro PWR_MGMT_1 (0x6B) un 0x00, para que el sensor esté activo
 	/*	Bit 7: Device_Reset 	= 0, No queremos reiniciar el dispositivo
 	 *  Bit 6: Sleep 			= 0, No queremos que el dispositivo esté en modo de sueño
@@ -427,12 +535,16 @@ void MPU6050_Init(void){
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &data, 1, 1000);
 	/*
 	 * Procedemos a configurar la escala del giroscopio y acelerómetro a un rango de 2000°/s 0x18
-	 * Y un rango en la aceleración de +- 16g: 0x18
+	 * Y un rango en la aceleración de +- 2g: 0x18
 	 * Omitimos los self tests, pues no los vamos a usar
 	 */
-	data = 0x18; //Valor para escribir en el registro GYRO_CONFIG (0x1B)
+	data = 0x00; //Valor para escribir en el registro GYRO_CONFIG (0x1B) y ACCEL_CONFIG_REG (0x1C)
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &data, 1, 1000);
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, ACCEL_CONFIG_REG, 1, &data, 1, 1000);
+
+	data = 0x01; //Valor a escribir en el INT_ENABLE para activar una interrupción en el MPU cada que hayan datos listos para leer
+	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, MCU_INT_ENABLE, 1, &data, 1, 1000);
+
 }
 
 void MPU6050_Read_Accel(void){
@@ -450,9 +562,9 @@ void MPU6050_Read_Accel(void){
 	ACCEL_Y_RAW = (int16_t)(data_Recolectada[2] << 8 | data_Recolectada[3]); // Combinamos los dos bytes de datos para el eje Y
 	ACCEL_Z_RAW = (int16_t)(data_Recolectada[4] << 8 | data_Recolectada[5]); // Combinamos los dos bytes de datos para el eje Z
 
-	ACCEL_X = ACCEL_X_RAW / 2048; // Convertimos a g
-	ACCEL_Y = ACCEL_Y_RAW / 2048; // Convertimos a g
-	ACCEL_Z = ACCEL_Z_RAW / 2048; // Convertimos a g
+	ACCEL_X = (float )ACCEL_X_RAW / 16384; // Convertimos a g
+	ACCEL_Y = (float )ACCEL_Y_RAW / 16384; // Convertimos a g
+	ACCEL_Z = (float )ACCEL_Z_RAW / 16384; // Convertimos a g
 }
 
 void MPU6050_Read_Gyro(void){
@@ -470,9 +582,9 @@ void MPU6050_Read_Gyro(void){
 	GYRO_Y_RAW = (int16_t)(data_Recolectada[2] << 8 | data_Recolectada[3]); // Combinamos los dos bytes de datos para el eje Y
 	GYRO_Z_RAW = (int16_t)(data_Recolectada[4] << 8 | data_Recolectada[5]); // Combinamos los dos bytes de datos para el eje Z
 
-	GYRO_X = GYRO_X_RAW / 16.4; // Convertimos a °/s
-	GYRO_Y = GYRO_Y_RAW / 16.4; // Convertimos a °/s
-	GYRO_Z = GYRO_Z_RAW / 16.4; // Convertimos a °/s
+	GYRO_X = (float )GYRO_X_RAW / 131; // Convertimos a °/s
+	GYRO_Y = (float )GYRO_Y_RAW / 131; // Convertimos a °/s
+	GYRO_Z = (float )GYRO_Z_RAW / 131; // Convertimos a °/s
 }
 
 void printhelp(void){
@@ -535,7 +647,7 @@ uint8_t uint16_es_potencia_de_2(uint16_t numero){
 }
 
 void perform_fft(void) {
-	convertir_uint16_to_float32(Buffer_Datos, Buffer_Datos_Float, ADC_BUFFER_MAX_LENGTH);
+	//convertir_uint16_to_float32(Buffer_Datos, Buffer_Datos_Float, ADC_BUFFER_MAX_LENGTH);
     // --- Paso 1: Realizar la FFT ---
     // Se asume que el buffer del ADC está listo
     arm_rfft_fast_f32(
@@ -561,6 +673,31 @@ void perform_fft(void) {
     // fft_magnitudes[1] = Magnitude of the first frequency bin
     // ...
     // fft_magnitudes[511] = Magnitude of the last useful frequency bin
+}
+
+void get_FrencuenciaDominante(void){
+	perform_fft();	//Realizamos una transformada de Fourier
+	float32_t magnitud_predominante;
+	uint32_t  magnitud_predominante_index;
+	float tasa_muestreo = 1000;
+
+	// --- Paso 1: Hallar el componente con el valor más alto ---
+	// Se busca desde el índice 1 porque el 0 es la componente DC).
+	arm_max_f32(
+			&FFT_Magnitudes[1],     		// Iniciamos desde el elemento 1
+			(fft_Length / 2) - 1,     		// Número de los elementos que se van a buscar, se asume que son la mitad
+			&magnitud_predominante,         // Esta variable contiene la magnitud más grande encontrada
+			&magnitud_predominante_index    // Y esta el índice respectivo
+	);
+
+	// Ajuste del índice, pues este debe ser absoluto
+	magnitud_predominante_index = magnitud_predominante_index + 1;
+
+	// Paso 2: Convertir el índice a un valor de frecuencia real
+	float32_t frequency_resolution = tasa_muestreo / (fft_Length);
+	float32_t dominant_frequency = magnitud_predominante_index * frequency_resolution;
+
+	frecuencia_dominante = dominant_frequency;
 }
 
 void print_fft_features(void){
@@ -619,7 +756,7 @@ void print_fft_features(void){
 
 	float valor_RMS = 0;
 	// Hallamos el valor RMS de la señal
-	convertir_uint16_to_float32(Buffer_Datos, Buffer_Datos_Float, ADC_BUFFER_MAX_LENGTH);
+	//convertir_uint16_to_float32(Buffer_Datos, Buffer_Datos_Float, ADC_BUFFER_MAX_LENGTH);
 	arm_rms_f32(Buffer_Datos_Float, ADC_BUFFER_MAX_LENGTH, &valor_RMS);	//El tercer argumento debe ser un puntero que apunta a una variable tipo float, se obtiene el valor RMS de la señal
 	valor_RMS = valor_RMS * 3.3;	//Originilamente el ADC_Float_Buffer está normalizado entre 0 y 1, lo multiplicamos por 3.3V para hallar la potencia adecuadamente
 	float potencia_promedio = valor_RMS * valor_RMS;	//La potencia de la señal es su valor RMS al cuadrado
@@ -731,12 +868,61 @@ void despachar_comando(char *line){
 	 }
 }
 
+void guardar_accel_z(float accel_z_value) {
+	Buffer_Datos_Float[index_Datos] = ACCEL_Z;
+    index_Datos = (index_Datos + 1) % fft_Length;
+}
+
+
 void FSM_update(State_t State){
 	switch (State){
-		case STATE_IDLE :{
-			//Aquí irá la toma de datos del MCU y el display en la pantalla
+		case STATE_IDLE:{
+			break;
+		}case STATE_READ_MCU_DATA:{
 			MPU6050_Read_Accel(); //Leemos el acelerómetro
-			MPU6050_Read_Gyro(); //Leemos el giroscopio
+			//MPU6050_Read_Gyro(); //Leemos el giroscopio
+			if(refresh_lcd >= 250){
+				refresh_lcd = 0;
+				Current_State = STATE_LCD_REFRESH;
+			}
+			I2C_verify();
+			break;
+		}case STATE_LCD_REFRESH:{
+
+			get_FrencuenciaDominante();
+
+			char buffer_lcd[30];
+			//Imprimimos los valores en la pantalla
+			// print the Acceleration and Gyro values on the LCD 20x4
+			lcd_send_cmd (0x80|0x00);  // goto 1,1
+			sprintf (buffer_lcd, "Accel x=%.2fg ", ACCEL_X);
+			lcd_send_string (buffer_lcd);
+
+			lcd_send_cmd (0x80|0x40);  // goto 2,1
+			sprintf (buffer_lcd, "Accel y=%.2fg ", ACCEL_Y);
+			lcd_send_string (buffer_lcd);
+
+			lcd_send_cmd (0x80|0x14);  // goto 3,1
+			sprintf (buffer_lcd, "Accel z=%.2fg ", ACCEL_Z);
+			lcd_send_string (buffer_lcd);
+
+			lcd_send_cmd(0x80 | 0x54);  // Línea 4, columna 1
+			sprintf(buffer_lcd, "Freq. Dom=%.2fg", frecuencia_dominante);
+
+			Current_State = STATE_IDLE;
+			/* Aquí se pueden mostrar también los datos del giroscopio
+			lcd_send_cmd (0x80|0x0A);  // goto 1,11
+			sprintf (buffer_lcd, "Gx=%.2f", GYRO_X);
+			lcd_send_string (buffer_lcd);
+
+			lcd_send_cmd (0x80|0x4A);  // goto 2,11
+			sprintf (buffer_lcd, "Gy=%.2f", GYRO_Y);
+			lcd_send_string (buffer_lcd);
+
+			lcd_send_cmd (0x80|0x1E);  // goto 3,11
+			sprintf (buffer_lcd, "Gz=%.2f", GYRO_Z);
+			lcd_send_string (buffer_lcd););
+			*/
 			break;
 		}
 		case STATE_TERMINAL :{
@@ -786,7 +972,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-
+	if(GPIO_Pin == MCU_Data_Ready_Pin){
+		refresh_lcd++;
+		Current_State = STATE_READ_MCU_DATA;
+	}
 }
 
 //Callback del USART Idle para no tener que saber el tamaño del mensaje
@@ -829,8 +1018,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

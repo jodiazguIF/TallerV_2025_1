@@ -2,9 +2,10 @@
 /** Put this in the src folder **/
 
 #include "i2c-lcd.h"
+#include "main.h"
 extern I2C_HandleTypeDef hi2c1;  // change your handler here accordingly
 
-#define SLAVE_ADDRESS_LCD 0x4E // change this according to ur setup
+#define SLAVE_ADDRESS_LCD (0x20 << 1) // change this according to ur setup
 
 void lcd_send_cmd (char cmd)
 {
@@ -43,6 +44,14 @@ void lcd_clear (void)
 
 void lcd_init (void)
 {
+	//Verificamos que sí está respondiendo la pantalla
+	if (HAL_I2C_IsDeviceReady(&hi2c1, SLAVE_ADDRESS_LCD, 1, 100) == HAL_OK) {
+		// LCD conectado
+		HAL_GPIO_WritePin(LCD_OK_GPIO_Port, LCD_OK_Pin, GPIO_PIN_SET);
+	} else {
+		// LCD NO conectado
+		HAL_GPIO_WritePin(I2C_Error_GPIO_Port, I2C_Error_Pin, GPIO_PIN_SET); // Apaga LED
+	}
 	// 4 bit initialisation
 	HAL_Delay(50);  // wait for >40ms
 	lcd_send_cmd (0x30);

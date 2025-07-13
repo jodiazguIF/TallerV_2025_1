@@ -94,6 +94,8 @@ typedef struct {
 // Se definen los estados finitos que usaremos para la máquina de estados
 typedef enum{
 	STATE_IDLE,
+	STATE_READ_MCU_DATA,
+	STATE_LCD_REFRESH,
 	STATE_TERMINAL,
 	STATE_HELP,
 	STATE_CONFIG_BLINKY,
@@ -145,14 +147,25 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define UserLed_Pin GPIO_PIN_1
 #define UserLed_GPIO_Port GPIOH
+#define LCD_OK_Pin GPIO_PIN_0
+#define LCD_OK_GPIO_Port GPIOC
+#define I2C_Error_Pin GPIO_PIN_2
+#define I2C_Error_GPIO_Port GPIOC
+#define USART_TX_Pin GPIO_PIN_2
+#define USART_TX_GPIO_Port GPIOA
+#define USART_RX_Pin GPIO_PIN_3
+#define USART_RX_GPIO_Port GPIOA
+#define I2C_OK_Pin GPIO_PIN_0
+#define I2C_OK_GPIO_Port GPIOB
+#define MCU_Data_Ready_Pin GPIO_PIN_10
+#define MCU_Data_Ready_GPIO_Port GPIOA
+#define MCU_Data_Ready_EXTI_IRQn EXTI15_10_IRQn
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
-#define Serial_Clock_Pin GPIO_PIN_6
-#define Serial_Clock_GPIO_Port GPIOB
-#define Serial_Data_Pin GPIO_PIN_7
-#define Serial_Data_GPIO_Port GPIOB
+#define SWO_Pin GPIO_PIN_3
+#define SWO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 #define RX_BUFFER_MAX_LENGTH 64
@@ -160,7 +173,8 @@ void Error_Handler(void);
 #define ADC_MAX_VALUE 4095
 
 //Definimos los registros del MPU6050
-#define MPU6050_ADDR (0x68 << 1) // Dirección del MPU6050 (7 bits) << 1 para I2C
+#define MPU6050_ADDR 	(0x68 << 1) // Dirección del MPU6050 (7 bits) << 1 para I2C
+#define LCD_ADDR		(0x20 << 1)	// Dirección dde la lcd con A0,A1,A2 = 0
 #define SMPLRT_DIV_REG 0x19
 #define GYRO_CONFIG_REG 0x1B
 #define ACCEL_CONFIG_REG 0x1C
@@ -168,7 +182,8 @@ void Error_Handler(void);
 #define TEMP_OUT_H_REG 0x41
 #define GYRO_XOUT_H_REG 0x43
 #define PWR_MGMT_1_REG 0x6B
-#define WHO_AM_I_REG 0x75
+#define MCU_WHO_AM_I_REG 0x75
+#define MCU_INT_ENABLE 0x38
 
 /* USER CODE END Private defines */
 
