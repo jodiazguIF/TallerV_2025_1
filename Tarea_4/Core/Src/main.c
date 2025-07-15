@@ -71,22 +71,23 @@ uint8_t*  rx_buffer;
 uint16_t  rx_size;
 
 //Variables y Buffers para la FFT
-float 	Buffer_Datos_Float 		[ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC hechos float
+float32_t 	Buffer_Datos_Float 		[ADC_BUFFER_MAX_LENGTH]; // Array para almacenar los valores del ADC hechos float
 uint16_t index_Datos = 0;
 float32_t FFT_Buffer			[ADC_BUFFER_MAX_LENGTH]; 	//Buffer para el output de la FFT
 float32_t FFT_Magnitudes 		[ADC_BUFFER_MAX_LENGTH/2];	//Buffer para las magnitudes de la FFT
 arm_rfft_fast_instance_f32 rfft_instance; 						//Se crea una instancia que es requerida por la función RFFT
 uint16_t fft_Length = ADC_BUFFER_MAX_LENGTH;					//Tamaño de la FFT que se va a realizar, 2048 por defecto
-uint16_t longitud_Buffer_Datos = 2048;
-float frecuencia_dominante = 0;
+uint16_t longitud_Buffer_Datos = ADC_BUFFER_MAX_LENGTH;
+float32_t frecuencia_dominante = 0;
 char *argumento_comandos;
 
 //Variables para el acelerómetro
-float ACCEL_X, ACCEL_Y, ACCEL_Z; // Variables para almacenar los valores del acelerómetro
-float GYRO_X, GYRO_Y, GYRO_Z; // Variables para almacenar los valores del giroscopio
+float32_t ACCEL_X, ACCEL_Y, ACCEL_Z; // Variables para almacenar los valores del acelerómetro
+float32_t GYRO_X, GYRO_Y, GYRO_Z; // Variables para almacenar los valores del giroscopio
 int16_t ACCEL_X_RAW, ACCEL_Y_RAW, ACCEL_Z_RAW; // Variables para almacenar los valores del acelerómetro _RAW
 int16_t GYRO_X_RAW, GYRO_Y_RAW, GYRO_Z_RAW; // Variables para almacenar los valores del giroscopio _RAW
 uint16_t refresh_lcd = 0;	//Variable auxiliar para refrescar la pantalla del LCD
+uint16_t refresh_fft = 0;
 
 //Le asignamos a una variable el mensaje de help, tipo static porque pues, no lo vamos a modificar nunca
 static const char help_msg[] =
@@ -175,6 +176,8 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim3); 	// Inicia el Timer 3 para interrupciones
 
+  lcd_send_cmd(0x80 | (0x54 + 18));  // 0x80 | 0x66 = 0xE6
+  lcd_send_string("Hz");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -531,7 +534,7 @@ void MPU6050_Init(void){
 	 * Luego, en en SMPLRT_Div, escribimos un valor de 0x07, para configurar el sample rate a 1kHz
 	 * Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV)
 	 */
-	data = 0x07; //Valor para escribir en SMPLRT_DIV
+	data = 0x08; //Valor para escribir en SMPLRT_DIV
 	HAL_I2C_Mem_Write(&hi2c1, MPU6050_ADDR, SMPLRT_DIV_REG, 1, &data, 1, 1000);
 	/*
 	 * Procedemos a configurar la escala del giroscopio y acelerómetro a un rango de 2000°/s 0x18
@@ -679,7 +682,7 @@ void get_FrencuenciaDominante(void){
 	perform_fft();	//Realizamos una transformada de Fourier
 	float32_t magnitud_predominante;
 	uint32_t  magnitud_predominante_index;
-	float tasa_muestreo = 1000;
+	float32_t tasa_muestreo = 700;
 
 	// --- Paso 1: Hallar el componente con el valor más alto ---
 	// Se busca desde el índice 1 porque el 0 es la componente DC).
@@ -868,8 +871,8 @@ void despachar_comando(char *line){
 	 }
 }
 
-void guardar_accel_z(float accel_z_value) {
-	Buffer_Datos_Float[index_Datos] = ACCEL_Z;
+void guardar_accel_z(float32_t accel_z_value) {
+	Buffer_Datos_Float[index_Datos] = accel_z_value;
     index_Datos = (index_Datos + 1) % fft_Length;
 }
 
@@ -885,12 +888,15 @@ void FSM_update(State_t State){
 				refresh_lcd = 0;
 				Current_State = STATE_LCD_REFRESH;
 			}
+			guardar_accel_z(ACCEL_Z);
+
 			I2C_verify();
 			break;
 		}case STATE_LCD_REFRESH:{
-
-			get_FrencuenciaDominante();
-
+			if(refresh_fft >= fft_Length){
+				get_FrencuenciaDominante();
+				refresh_fft = 0;
+			}
 			char buffer_lcd[30];
 			//Imprimimos los valores en la pantalla
 			// print the Acceleration and Gyro values on the LCD 20x4
@@ -907,7 +913,8 @@ void FSM_update(State_t State){
 			lcd_send_string (buffer_lcd);
 
 			lcd_send_cmd(0x80 | 0x54);  // Línea 4, columna 1
-			sprintf(buffer_lcd, "Freq. Dom=%.2fg", frecuencia_dominante);
+			sprintf(buffer_lcd, "Freq.Dom=%.2f", frecuencia_dominante);
+			lcd_send_string(buffer_lcd);
 
 			Current_State = STATE_IDLE;
 			/* Aquí se pueden mostrar también los datos del giroscopio
@@ -974,6 +981,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == MCU_Data_Ready_Pin){
 		refresh_lcd++;
+		refresh_fft++;
 		Current_State = STATE_READ_MCU_DATA;
 	}
 }

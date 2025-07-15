@@ -169,12 +169,12 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 #define RX_BUFFER_MAX_LENGTH 64
-#define ADC_BUFFER_MAX_LENGTH 2048
+#define ADC_BUFFER_MAX_LENGTH 512
 #define ADC_MAX_VALUE 4095
 
 //Definimos los registros del MPU6050
 #define MPU6050_ADDR 	(0x68 << 1) // Dirección del MPU6050 (7 bits) << 1 para I2C
-#define LCD_ADDR		(0x20 << 1)	// Dirección dde la lcd con A0,A1,A2 = 0
+#define LCD_ADDR		(0x27 << 1)	// Dirección dde la lcd con A0,A1,A2 = 0
 #define SMPLRT_DIV_REG 0x19
 #define GYRO_CONFIG_REG 0x1B
 #define ACCEL_CONFIG_REG 0x1C
