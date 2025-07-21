@@ -3,7 +3,7 @@
 #include "own_mpu6050.h"
 #include "WiFi.h"
 #include "frames.h"
-#include "motor.cpp"
+#include "motor.h"
 
 
 void setup() {

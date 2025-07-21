@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "motor.h"
 
 #define BRAKE_PIN 7
 #define DIR_PIN 8
